@@ -1,0 +1,2771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Family OS — First Prototype</title>
+<!-- PWA: makes this installable to a phone home screen and runnable full-screen on a TV -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#a7c4a0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Family OS" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<!--
+  ============================================================================
+  FAMILY OS — First Prototype (v1)
+  A calming family dashboard. Single file. No backend. localStorage-based.
+  Deployable on GitHub Pages (just commit this file as index.html).
+
+  TONE: This is NOT punishment-focused. It is a family team tool.
+        "Everyone contributes. Everyone gets freedom. Privileges come after
+         responsibility."
+
+  ---------------------------------------------------------------------------
+  DEVELOPER NOTE — ANTHROPIC API (Brain Dump section):
+  For real Anthropic API use, create a backend / serverless function.
+  DO NOT place API keys directly in browser JavaScript. Anything in this file
+  is visible to anyone who opens the page. The "Organize with AI" hook in this
+  file calls a placeholder endpoint you would host yourself (e.g. a Cloudflare
+  Worker, Vercel/Netlify function, or small Express server) which holds the key
+  server-side and proxies the request to api.anthropic.com.
+  ---------------------------------------------------------------------------
+-->
+<style>
+  /* ---------------------------- THEME / TOKENS --------------------------- */
+  :root {
+    --bg:           #f6f3ee;
+    --bg-2:         #efeae1;
+    --card:         #ffffff;
+    --ink:          #3d3a35;
+    --ink-soft:     #6f6a62;
+    --line:         #e7e1d6;
+    --sage:         #a7c4a0;
+    --sage-deep:    #6f9a72;
+    --clay:         #e6a57e;
+    --clay-deep:    #cf8259;
+    --sky:          #a9c8d8;
+    --sky-deep:     #6f9cb3;
+    --lav:          #c4b5d6;
+    --butter:       #f3d9a4;
+    --rose:         #e7b3b3;
+    --good:         #6f9a72;
+    --pause:        #cf8259;
+    --radius:       18px;
+    --radius-sm:    12px;
+    --shadow:       0 6px 18px rgba(80,70,55,.08);
+    --shadow-soft:  0 2px 8px rgba(80,70,55,.06);
+    --font:         system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    color: var(--ink);
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    background-attachment: fixed;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------- HEADER ---------------------------------- */
+  header.appbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(246,243,238,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .appbar-inner {
+    max-width: 1100px; margin: 0 auto; padding: 14px 18px 0;
+  }
+  .brand { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .brand .logo {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--sage), var(--sky));
+    display:flex; align-items:center; justify-content:center;
+    font-size: 22px; box-shadow: var(--shadow-soft);
+  }
+  .brand h1 { font-size: 1.15rem; margin: 0; letter-spacing:.2px; }
+  .brand .sub { font-size:.78rem; color: var(--ink-soft); margin:0; }
+  .brand .spacer { flex: 1; }
+  .today-pill {
+    font-size:.8rem; color: var(--ink-soft);
+    background: var(--card); border:1px solid var(--line);
+    padding: 6px 12px; border-radius: 999px; box-shadow: var(--shadow-soft);
+    white-space: nowrap;
+  }
+
+  /* ---------------------------- TABS ------------------------------------ */
+  nav.tabs {
+    max-width: 1100px; margin: 0 auto; padding: 10px 10px 12px;
+    display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  nav.tabs::-webkit-scrollbar { height: 6px; }
+  nav.tabs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+  .tab {
+    border: 1px solid var(--line); background: var(--card);
+    color: var(--ink-soft); padding: 9px 14px; border-radius: 999px;
+    font-size:.88rem; font-weight:600; cursor: pointer; white-space: nowrap;
+    transition: all .15s ease; display:flex; align-items:center; gap:7px;
+  }
+  .tab:hover { color: var(--ink); border-color: var(--sage); }
+  .tab.active {
+    background: var(--sage); color: #2f3d2f; border-color: var(--sage-deep);
+    box-shadow: var(--shadow-soft);
+  }
+  .tab .emoji { font-size: 1rem; }
+
+  /* ---------------------------- LAYOUT ---------------------------------- */
+  main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 80px; }
+  .panel { display: none; animation: fade .25s ease; }
+  .panel.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+
+  .section-head { margin: 22px 2px 12px; }
+  .section-head h2 { margin: 0; font-size: 1.25rem; }
+  .section-head p { margin: 4px 0 0; color: var(--ink-soft); font-size:.9rem; }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 760px){ .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
+  }
+  .card h3 { margin: 0 0 4px; font-size: 1.02rem; display:flex; align-items:center; gap:8px; }
+  .card .hint { font-size:.8rem; color: var(--ink-soft); margin: 0 0 10px; }
+  .card.accent-sage  { border-left: 5px solid var(--sage); }
+  .card.accent-clay  { border-left: 5px solid var(--clay); }
+  .card.accent-sky   { border-left: 5px solid var(--sky); }
+  .card.accent-lav   { border-left: 5px solid var(--lav); }
+  .card.accent-butter{ border-left: 5px solid var(--butter); }
+  .card.accent-rose  { border-left: 5px solid var(--rose); }
+
+  label.field { display:block; margin-bottom: 12px; }
+  label.field > span { display:block; font-size:.8rem; font-weight:600; color: var(--ink-soft); margin-bottom: 5px; }
+  input[type="text"], input[type="time"], input[type="number"], textarea, select {
+    width: 100%; font-family: var(--font); font-size:.92rem; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 10px 12px; transition: border-color .15s;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--sage-deep); background: #fff; }
+  textarea { resize: vertical; min-height: 90px; }
+
+  .btn {
+    border: none; border-radius: 999px; padding: 10px 16px; font-size:.88rem;
+    font-weight: 700; cursor: pointer; font-family: var(--font);
+    transition: transform .08s ease, filter .15s ease; display:inline-flex;
+    align-items:center; gap:7px;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-sage  { background: var(--sage); color:#2f3d2f; }
+  .btn-clay  { background: var(--clay); color:#5a3018; }
+  .btn-sky   { background: var(--sky); color:#243d49; }
+  .btn-ghost { background: var(--bg); color: var(--ink-soft); border:1px solid var(--line); }
+  .btn-ghost:hover { color: var(--ink); }
+  .btn:hover { filter: brightness(1.04); }
+  .btn.sm { padding: 6px 12px; font-size:.8rem; }
+
+  /* ---------------------------- CHECKLIST ------------------------------- */
+  .check-row {
+    display:flex; align-items:center; gap:12px; padding: 11px 13px;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    margin-bottom: 8px; cursor: pointer; transition: background .15s, border-color .15s;
+    background: var(--bg);
+  }
+  .check-row:hover { border-color: var(--sage); }
+  .check-row.done { background: #eef6ec; border-color: var(--sage); }
+  .check-row input[type="checkbox"]{ width: 22px; height: 22px; accent-color: var(--sage-deep); flex:none; cursor:pointer; }
+  .check-row .txt { font-size:.93rem; }
+  .check-row.done .txt { color: var(--sage-deep); }
+
+  .gate {
+    margin-top: 14px; padding: 16px; border-radius: var(--radius-sm);
+    text-align:center; font-weight: 700; border: 1px dashed var(--line);
+    background: var(--bg); color: var(--ink-soft);
+  }
+  .gate.open {
+    background: #eef6ec; border-color: var(--sage-deep); color: var(--sage-deep);
+    border-style: solid;
+  }
+
+  /* ---------------------------- PROJECT CARDS --------------------------- */
+  .proj {
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 13px; background: var(--bg); transition: all .15s;
+  }
+  .proj.selected { border-color: var(--sage-deep); background:#eef6ec; box-shadow: var(--shadow-soft); }
+  .proj.finished { border-color: var(--sky-deep); background:#eaf2f6; }
+  .proj-title { font-weight: 700; font-size:.95rem; display:flex; align-items:center; gap:7px; }
+  .proj-meta { font-size:.78rem; color: var(--ink-soft); margin: 6px 0 10px; }
+  .proj .timepick { display:flex; gap:6px; margin-bottom: 10px; }
+  .timechip {
+    flex:1; text-align:center; font-size:.78rem; font-weight:600; padding:6px 0;
+    border:1px solid var(--line); border-radius: 99px; cursor:pointer; background:#fff; color:var(--ink-soft);
+  }
+  .timechip.on { background: var(--butter); border-color: var(--clay); color:#5a3018; }
+  .proj-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .proj-status { font-size:.76rem; font-weight:700; padding:3px 9px; border-radius:99px; }
+  .status-idle    { background:#eee; color:#888; }
+  .status-running { background: var(--butter); color:#5a3018; }
+  .status-done    { background: var(--sage); color:#2f3d2f; }
+  .tidy { display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--ink-soft); margin-top:8px; cursor:pointer; }
+  .tidy input { width:18px; height:18px; accent-color: var(--sage-deep); }
+
+  /* ---------------------------- CONTRIBUTIONS -------------------------- */
+  .contrib {
+    display:flex; align-items:center; gap:10px; padding: 10px 12px;
+    border:1px solid var(--line); border-radius: var(--radius-sm); margin-bottom:8px;
+    background: var(--bg); flex-wrap:wrap;
+  }
+  .contrib .name { flex:1; font-size:.92rem; min-width:120px; }
+  .contrib.done { background:#eef6ec; border-color: var(--sage); }
+  .assign { display:flex; gap:4px; }
+  .assign button {
+    border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+    border-radius:99px; padding:4px 10px; font-size:.76rem; font-weight:700; cursor:pointer;
+  }
+  .assign button.on-jack { background: var(--sky); color:#243d49; border-color: var(--sky-deep); }
+  .assign button.on-anya { background: var(--lav); color:#3d2f4d; border-color:#9c86b8; }
+  .assign button.on-both { background: var(--sage); color:#2f3d2f; border-color: var(--sage-deep); }
+
+  /* ---------------------------- DAILY RHYTHM (3D timetable) ------------ */
+  .cal-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .viewseg { display:inline-flex; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:3px; box-shadow:var(--shadow-soft); }
+  .viewseg button { border:none; background:none; padding:8px 16px; border-radius:999px; font-weight:700; font-size:.85rem; color:var(--ink-soft); cursor:pointer; }
+  .viewseg button.on { background:var(--sage); color:#2f3d2f; }
+  .daynav { display:flex; align-items:center; gap:6px; }
+  .daynav .now { font-weight:800; }
+
+  .dow-row { display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px; }
+  .dow-chip { flex:none; min-width:58px; text-align:center; border:1px solid var(--line); background:var(--card);
+    border-radius:14px; padding:8px 6px; cursor:pointer; box-shadow:var(--shadow-soft); transition:all .15s; }
+  .dow-chip .d { font-size:.7rem; font-weight:800; color:var(--ink-soft); letter-spacing:.4px; }
+  .dow-chip .n { font-size:1.1rem; font-weight:800; }
+  .dow-chip.on { background:var(--sage); border-color:var(--sage-deep); color:#2f3d2f; }
+  .dow-chip.on .d { color:#3d5a3d; }
+  .dow-chip.is-today { box-shadow:0 0 0 2px rgba(111,154,114,.35), var(--shadow-soft); }
+
+  /* earning / screen gate summary */
+  .gate-summary { display:flex; gap:14px; flex-wrap:wrap; align-items:center; background:var(--card);
+    border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow-soft); margin-bottom:14px; }
+  .gate-summary .ring { --p:0; width:62px; height:62px; border-radius:50%; flex:none;
+    background:conic-gradient(var(--sage-deep) calc(var(--p)*1%), var(--line) 0);
+    display:flex; align-items:center; justify-content:center; }
+  .gate-summary .ring span { width:46px;height:46px;border-radius:50%;background:var(--card);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem; }
+  .gate-summary .txt { flex:1; min-width:180px; }
+  .gate-summary .txt b { font-size:1rem; }
+  .gate-summary .txt p { margin:2px 0 0; font-size:.84rem; color:var(--ink-soft); }
+  .gate-summary .verdict { font-weight:800; padding:8px 14px; border-radius:999px; font-size:.85rem; white-space:nowrap; }
+  .verdict.locked { background:#f3e7dd; color:#8a5a36; }
+  .verdict.open   { background:#e6f3e3; color:var(--sage-deep); }
+
+  /* 3D stage + proportional timeline */
+  .rhythm-stage { perspective:1600px; margin-bottom:14px; }
+  .rhythm-track { position:relative; transform-style:preserve-3d; transition:transform .25s ease;
+    background:linear-gradient(180deg,#fffdf9,#f7f3ec); border:1px solid var(--line);
+    border-radius:var(--radius); padding:10px 10px 10px 56px; box-shadow:var(--shadow); }
+  .hourline { position:absolute; left:56px; right:10px; border-top:1px dashed #e9e2d5; }
+  .hourlbl { position:absolute; left:8px; font-size:.66rem; font-weight:700; color:var(--ink-soft); transform:translateY(-7px); }
+  .nowline { position:absolute; left:48px; right:6px; height:0; border-top:2px solid var(--clay-deep); z-index:6; }
+  .nowline::before { content:"now"; position:absolute; left:-44px; top:-9px; font-size:.6rem; font-weight:800;
+    background:var(--clay-deep); color:#fff; padding:1px 6px; border-radius:99px; }
+  .nowdot { position:absolute; left:50px; width:9px;height:9px;border-radius:50%;background:var(--clay-deep); transform:translate(-50%,-4px); z-index:7; }
+
+  .blk { position:absolute; left:56px; right:12px; border-radius:12px; padding:8px 10px; overflow:hidden;
+    color:#3a352c; cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,.06), var(--shadow-soft);
+    transition:transform .15s ease, box-shadow .15s ease; transform-style:preserve-3d; }
+  .blk:hover { transform:translateY(-3px) translateZ(18px) scale(1.012); box-shadow:0 10px 22px rgba(80,70,55,.18); z-index:8; }
+  .blk .bt { font-weight:800; font-size:.86rem; display:flex; align-items:center; gap:6px; line-height:1.2; }
+  .blk .bm { font-size:.72rem; opacity:.8; font-weight:600; }
+  .blk .bdone { position:absolute; top:6px; right:8px; font-size:.7rem; font-weight:800; background:rgba(255,255,255,.7); border-radius:99px; padding:1px 7px; }
+  .blk.done { filter:saturate(.6) brightness(1.03); }
+  .blk.done .bt::after { content:"✓"; margin-left:4px; }
+  .blk.earn { border-left:4px solid rgba(0,0,0,.18); }
+  .blk.locked { outline:2px dashed rgba(120,90,60,.5); }
+  .blk.locked .bt::before { content:"🔒 "; }
+  .blk.tiny { padding:4px 8px; }
+  .blk.tiny .bm { display:none; }
+
+  /* mini multi-day views (week / 3-day) */
+  .mini-grid { display:grid; gap:10px; overflow-x:auto; padding-bottom:8px; }
+  .mini-col { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:8px; box-shadow:var(--shadow-soft); min-width:0; }
+  .mini-col.is-today { border-color:var(--sage-deep); box-shadow:0 0 0 2px rgba(111,154,114,.3), var(--shadow-soft); }
+  .mini-head { text-align:center; font-weight:800; font-size:.8rem; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .mini-head small { display:block; font-weight:600; color:var(--ink-soft); font-size:.68rem; }
+  .mini-track { position:relative; }
+  .mini-blk { position:absolute; left:2px; right:2px; border-radius:6px; padding:2px 5px; font-size:.62rem; font-weight:700;
+    color:#3a352c; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; box-shadow:var(--shadow-soft); }
+  .mini-blk.done::after { content:" ✓"; }
+
+  .rhythm-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+
+  /* block editor modal */
+  .modal-bg { position:fixed; inset:0; background:rgba(60,55,45,.45); display:none; align-items:center; justify-content:center; z-index:120; padding:16px; }
+  .modal-bg.show { display:flex; }
+  .modal { background:var(--card); border-radius:var(--radius); padding:20px; width:100%; max-width:420px; box-shadow:var(--shadow); max-height:90vh; overflow:auto; }
+  .modal h3 { margin:0 0 14px; }
+  .catpick { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .catpick .cc { border:1px solid var(--line); border-radius:10px; padding:8px 4px; text-align:center; font-size:.72rem; font-weight:700; cursor:pointer; }
+  .catpick .cc.on { outline:2px solid var(--sage-deep); }
+  .timepair { display:flex; gap:10px; }
+  .timepair > label { flex:1; }
+  .voice-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .rec-dot { width:10px;height:10px;border-radius:50%;background:#cf5b5b; display:inline-block; }
+  .rec-on .rec-dot { animation:pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  /* ---------------------------- POINTS --------------------------------- */
+  .score-board { display:flex; gap:14px; flex-wrap:wrap; }
+  .score-card {
+    flex:1; min-width: 150px; text-align:center; background:var(--card);
+    border:1px solid var(--line); border-radius: var(--radius); padding:18px; box-shadow:var(--shadow-soft);
+  }
+  .score-card .who { font-weight:800; font-size:1rem; }
+  .score-card .num { font-size: 2.6rem; font-weight:800; line-height:1.1; margin:6px 0; }
+  .score-card.jack .num { color: var(--sky-deep); }
+  .score-card.anya .num { color: #9c86b8; }
+  .pointbtns { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:10px; }
+  .pointbtns .btn { font-size:.74rem; padding:6px 10px; }
+  .pause-banner {
+    margin-top:14px; padding: 14px 16px; border-radius: var(--radius-sm);
+    background:#fbeee4; border:1px solid var(--clay); color:#7a4a2a; font-weight:600;
+    display:flex; align-items:center; gap:10px;
+  }
+
+  /* ---------------------------- RESET ---------------------------------- */
+  .reset-steps { counter-reset: step; list-style:none; padding:0; margin: 12px 0; }
+  .reset-steps li {
+    counter-increment: step; padding: 12px 14px 12px 50px; position:relative;
+    border:1px solid var(--line); border-radius: var(--radius-sm); margin-bottom:8px; background:var(--bg);
+    font-weight:600;
+  }
+  .reset-steps li::before {
+    content: counter(step); position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    width:26px; height:26px; border-radius:99px; background:var(--lav); color:#3d2f4d;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.85rem;
+  }
+  .reset-steps li.active { background:#f1ecf6; border-color:#9c86b8; }
+  .reset-steps li.active::before { background:#9c86b8; color:#fff; }
+  #resetTimer { font-size:2.4rem; font-weight:800; text-align:center; color:var(--lav); }
+
+  /* ---------------------------- QUOTE / NOTE --------------------------- */
+  .quote {
+    background: linear-gradient(135deg, #eef6ec, #eaf2f6);
+    border:1px solid var(--line); border-radius: var(--radius); padding: 18px 20px;
+    font-size:1rem; font-weight:600; color: var(--ink); box-shadow: var(--shadow-soft);
+  }
+  .quote .small { display:block; font-weight:400; color:var(--ink-soft); font-size:.85rem; margin-top:6px; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(120px);
+    background: var(--ink); color:#fff; padding: 12px 20px; border-radius: 999px;
+    font-size:.88rem; font-weight:600; box-shadow: var(--shadow); z-index: 200;
+    transition: transform .3s ease; max-width: 90vw; text-align:center;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .data-actions { display:flex; gap:10px; flex-wrap:wrap; }
+  .pill-note { font-size:.8rem; color:var(--ink-soft); background:var(--bg); border:1px solid var(--line); padding:8px 12px; border-radius: var(--radius-sm); }
+  .footer-note { text-align:center; color:var(--ink-soft); font-size:.78rem; margin-top:30px; }
+  .dev-note { font-size:.78rem; color:var(--ink-soft); background:#fff6e9; border:1px solid var(--butter); border-radius:var(--radius-sm); padding:10px 12px; margin-top:10px; }
+  .ai-settings { margin-top:12px; border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px; background:var(--bg); }
+  .ai-settings > summary { cursor:pointer; font-weight:700; font-size:.85rem; color:var(--ink-soft); }
+  .ai-change { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--line); border-radius:var(--radius-sm); margin-bottom:8px; background:var(--bg); }
+  .ai-change input[type="checkbox"]{ width:20px;height:20px;accent-color:var(--sage-deep);flex:none;margin-top:2px;cursor:pointer; }
+  .ai-change .ac-body{ flex:1; min-width:0; }
+  .ai-change .ac-kind{ font-size:.68rem; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--sage-deep); }
+  .ai-change .ac-text{ font-size:.9rem; }
+  .ai-change .ac-text small{ color:var(--ink-soft); }
+
+  /* ============================ KID MISSION MODE ============================ */
+  #kidApp { max-width: 560px; margin:0 auto; padding: 0 0 90px; min-height:100vh;
+    background: linear-gradient(180deg,#eaf3fb 0%, #eef6ec 60%, #f6f3ee 100%); }
+  .kid-bar { position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:10px;
+    padding:14px 16px 10px; background:linear-gradient(180deg,rgba(234,243,251,.96),rgba(234,243,251,.0)); }
+  .kid-back { width:46px;height:46px;border:none;border-radius:50%;background:#fff;box-shadow:var(--shadow-soft);
+    font-size:1.3rem;color:var(--sky-deep);cursor:pointer;flex:none; display:flex;align-items:center;justify-content:center; }
+  .kid-back:active{ transform:scale(.94); }
+  .kid-pill { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:#fff;
+    border-radius:999px; padding:10px 18px; box-shadow:var(--shadow-soft); font-weight:800; font-size:1.05rem; }
+  .kid-pill .av { font-size:1.2rem; }
+  .kid-pill .stars { color:#e8a93a; display:flex; align-items:center; gap:3px; }
+  .kid-lock { width:46px;height:46px;border:none;border-radius:50%;background:#fff;box-shadow:var(--shadow-soft);
+    font-size:1.2rem;cursor:pointer;flex:none; display:flex;align-items:center;justify-content:center; }
+  .kid-lock:active{ transform:scale(.94); }
+
+  .kid-screen { padding: 6px 16px 0; animation: fade .25s ease; }
+  .kid-hero { display:flex; align-items:center; gap:16px; border-radius:24px; padding:18px; margin-bottom:18px; box-shadow:var(--shadow-soft); }
+  .kid-hero .badge { width:92px;height:92px;border-radius:20px;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:3rem;background:#fff;box-shadow:var(--shadow-soft); }
+  .kid-hero h2 { margin:0; font-size:1.5rem; }
+  .kid-hero p { margin:4px 0 0; font-size:.95rem; color:var(--ink); opacity:.8; }
+  .hero-create{ background:#efe7f7; } .hero-create h2{ color:#7d5ba6; }
+  .hero-move{ background:#e6f3e3; } .hero-move h2{ color:var(--sage-deep); }
+  .hero-help{ background:#fbe9dd; } .hero-help h2{ color:var(--clay-deep); }
+  .hero-home{ background:linear-gradient(135deg,#e6f3e3,#eaf2f6); } .hero-home h2{ color:var(--sage-deep); }
+
+  /* big choice cards (profiles, day-type, paths) */
+  .kid-choices { display:grid; gap:14px; }
+  .choice { display:flex; align-items:center; gap:16px; background:#fff; border:none; border-radius:22px;
+    padding:18px 20px; box-shadow:var(--shadow); cursor:pointer; text-align:left; width:100%;
+    transition:transform .1s ease, box-shadow .15s ease; }
+  .choice:active{ transform:scale(.98); }
+  .choice:hover{ box-shadow:0 10px 24px rgba(80,70,55,.14); }
+  .choice .ci { width:64px;height:64px;border-radius:18px;flex:none;display:flex;align-items:center;justify-content:center;font-size:2.1rem; }
+  .choice .cmeta { flex:1; min-width:0; }
+  .choice .cmeta b { font-size:1.2rem; display:block; }
+  .choice .cmeta span { font-size:.88rem; color:var(--ink-soft); }
+  .choice .cgo { font-size:1.4rem; color:var(--ink-soft); }
+  .ci-create{ background:#efe7f7; } .ci-move{ background:#e6f3e3; } .ci-help{ background:#fbe9dd; }
+  .ci-jack{ background:var(--sky); } .ci-anya{ background:var(--lav); }
+  .ci-school{ background:#d9e8f5; } .ci-weekend{ background:#fdeccf; } .ci-special{ background:#f7dde6; }
+
+  /* mission cards */
+  .mission { display:flex; align-items:center; gap:14px; background:#fff; border-radius:20px; padding:14px 16px;
+    box-shadow:var(--shadow-soft); margin-bottom:12px; }
+  .mission .mi { width:58px;height:58px;border-radius:16px;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:2rem; background:var(--bg); }
+  .mission .mbody{ flex:1; min-width:0; }
+  .mission .mtitle{ font-weight:800; font-size:1.05rem; line-height:1.2; }
+  .mission .mmeta{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px; font-size:.78rem; color:var(--ink-soft); }
+  .mission .tag{ background:var(--bg); border-radius:999px; padding:2px 9px; font-weight:700; }
+  .tag-solo{ background:#e7eef6; color:var(--sky-deep); }
+  .tag-team{ background:#e9e2f4; color:#7d5ba6; }
+  .tag-money{ background:#e6f3e3; color:var(--sage-deep); }
+  .mtimes{ display:flex; gap:6px; margin-top:8px; }
+  .mtime{ border:1px solid var(--line); background:#fff; border-radius:999px; padding:5px 11px; font-size:.78rem;font-weight:700;
+    color:var(--ink-soft); cursor:pointer; display:flex;align-items:center;gap:4px; }
+  .mtime.on{ background:var(--butter); border-color:var(--clay); color:#5a3018; }
+  .mstar { flex:none; border:none; cursor:pointer; border-radius:999px; padding:12px 16px; font-weight:800; font-size:.95rem;
+    background:#5bb85b; color:#fff; box-shadow:0 3px 0 rgba(0,0,0,.08); display:flex;align-items:center;gap:5px; min-width:74px; justify-content:center; }
+  .mstar:active{ transform:translateY(1px); }
+  .mstar.done{ background:#3f9a3f; }
+
+  /* progress / gate to timer */
+  .kid-progress { display:flex; gap:10px; margin:6px 0 18px; }
+  .pcell { flex:1; text-align:center; background:#fff; border-radius:18px; padding:12px 6px; box-shadow:var(--shadow-soft); }
+  .pcell .pemoji{ font-size:1.6rem; }
+  .pcell .plabel{ font-size:.74rem; font-weight:800; color:var(--ink-soft); margin-top:2px; }
+  .pcell.done{ background:#e6f3e3; } .pcell.done .pcheck{ color:var(--sage-deep); font-weight:900; }
+  .pcheck{ font-size:.9rem; color:var(--line); font-weight:900; }
+
+  .timer-card { border-radius:22px; padding:18px; box-shadow:var(--shadow-soft); margin-top:8px; text-align:center; }
+  .timer-locked{ background:#f1ece4; color:var(--ink-soft); }
+  .timer-open{ background:#fdf3da; }
+  .timer-card .tbig{ font-weight:800; font-size:1.05rem; margin-bottom:4px; }
+  .timer-card .tsub{ font-size:.85rem; color:var(--ink-soft); }
+  .btn-request{ margin-top:12px; border:none; border-radius:999px; padding:14px 22px; font-weight:800; font-size:1rem;
+    background:#e8a93a; color:#5a3018; cursor:pointer; box-shadow:0 3px 0 rgba(0,0,0,.1); }
+  .btn-request:disabled{ background:#e3ddd2; color:#aaa298; box-shadow:none; cursor:not-allowed; }
+  .btn-request:active:not(:disabled){ transform:translateY(1px); }
+
+  /* extra entry tiles (rewards / hotspot / football) on the paths screen */
+  .extra-tile { display:flex; align-items:center; gap:14px; border:none; border-radius:20px; padding:16px; width:100%;
+    cursor:pointer; box-shadow:var(--shadow-soft); margin-bottom:12px; text-align:left; transition:transform .1s ease; }
+  .extra-tile:active{ transform:scale(.98); }
+  .extra-tile .ei{ width:54px;height:54px;border-radius:16px;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.8rem;background:#fff; }
+  .extra-tile .emeta{ flex:1; } .extra-tile .emeta b{ display:block; font-size:1.05rem; } .extra-tile .emeta span{ font-size:.82rem;color:var(--ink-soft); }
+  .et-reward{ background:#fdeecb; } .et-hotspot{ background:#e3eefb; } .et-football{ background:#e6f3e3; }
+
+  /* football routine timeline */
+  .fb-step{ display:flex; align-items:center; gap:14px; background:#fff; border-radius:16px; padding:14px 16px; box-shadow:var(--shadow-soft); margin-bottom:10px; }
+  .fb-step .fbt{ font-weight:800; font-size:1.1rem; color:var(--sage-deep); min-width:62px; }
+  .fb-step .fbi{ font-size:1.5rem; } .fb-step .fbx b{ display:block; } .fb-step .fbx span{ font-size:.8rem; color:var(--ink-soft); }
+
+  /* reward cards */
+  .reward-card{ display:flex; align-items:center; gap:14px; background:#fff; border-radius:18px; padding:14px 16px; box-shadow:var(--shadow-soft); margin-bottom:12px; }
+  .reward-card.locked{ opacity:.65; }
+  .reward-card.unlocked{ background:#e6f3e3; }
+  .reward-card .ri{ width:52px;height:52px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.8rem;background:var(--bg); }
+  .reward-card .rbody{ flex:1; } .reward-card .rbody b{ display:block; font-size:1.02rem; } .reward-card .rbody span{ font-size:.8rem;color:var(--ink-soft); }
+  .reward-card .runlock{ border:none;border-radius:999px;padding:10px 16px;font-weight:800;font-size:.85rem;cursor:pointer;
+    background:#e8a93a;color:#5a3018; white-space:nowrap; }
+  .reward-card .runlock:disabled{ background:#e3ddd2;color:#aaa298;cursor:not-allowed; }
+  .reward-card .rgot{ font-weight:800;color:var(--sage-deep);white-space:nowrap; }
+
+  /* hotspot */
+  .hot-timer{ font-size:3rem; font-weight:800; text-align:center; color:var(--sky-deep); margin:8px 0; }
+  .zone-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .zone-btn{ border:1px solid var(--line); background:#fff; border-radius:16px; padding:14px 10px; font-weight:700; font-size:.9rem;
+    cursor:pointer; box-shadow:var(--shadow-soft); }
+  .zone-btn.picked{ background:#e6f3e3; border-color:var(--sage-deep); color:var(--sage-deep); }
+
+  .kid-msg { text-align:center; font-size:.85rem; color:var(--ink-soft); padding:16px 10px 0; line-height:1.5; }
+  .emergency-btn { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:45; max-width:528px; width:calc(100% - 32px);
+    border:none; border-radius:16px; padding:14px; font-weight:800; font-size:1rem; color:#fff; background:#cf4848;
+    box-shadow:0 6px 16px rgba(180,60,60,.35); cursor:pointer; }
+  .emergency-btn:active{ transform:translateX(-50%) translateY(1px); }
+
+  /* dark safety / pin modal */
+  .dark-modal { background:#2b2622; color:#f3ece4; }
+  .dark-modal h3{ color:#fff; }
+  .safe-yes{ color:#7ed07e; font-weight:700; margin:8px 0; }
+  .safe-no{ color:#e98a8a; font-weight:700; margin:8px 0; }
+  .safe-divider{ border:none; border-top:1px solid #4a443d; margin:12px 0; }
+
+  /* PIN pad */
+  .pinpad { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px; }
+  .pinpad button{ border:none; border-radius:14px; padding:16px; font-size:1.3rem; font-weight:800; cursor:pointer;
+    background:var(--bg); color:var(--ink); }
+  .pinpad button:active{ background:var(--line); }
+  .pindots{ display:flex; gap:12px; justify-content:center; margin:14px 0; }
+  .pindot{ width:16px;height:16px;border-radius:50%;border:2px solid var(--sky-deep); }
+  .pindot.on{ background:var(--sky-deep); }
+
+  .parent-return { display:flex; align-items:center; gap:10px; max-width:1100px; margin:0 auto; padding:10px 16px 0; }
+  .parent-return .btn-kid { border:none;border-radius:999px;padding:9px 16px;font-weight:700;cursor:pointer;
+    background:var(--lav);color:#3d2f4d; }
+
+  /* welcome screen */
+  .kid-brand { font-size:1.15rem; font-weight:800; color:var(--sky-deep); display:flex; align-items:center; gap:6px; }
+  .welcome { text-align:center; padding-top:24px; }
+  .welcome h1 { font-size:2.2rem; margin:18px 0 6px; color:var(--sky-deep); }
+  .welcome .sub { font-size:1.05rem; color:var(--ink-soft); margin:0 0 28px; }
+  .profile-tiles { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:0 auto; max-width:440px; }
+  .ptile { border:none; border-radius:26px; padding:24px 16px 20px; cursor:pointer; box-shadow:var(--shadow);
+    transition:transform .1s ease, box-shadow .15s ease; }
+  .ptile:active{ transform:scale(.97); }
+  .ptile:hover{ box-shadow:0 12px 28px rgba(80,70,55,.16); }
+  .ptile .pic { width:96px;height:96px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+    font-size:2.6rem; box-shadow:var(--shadow-soft); }
+  .ptile .pname { font-size:1.4rem; font-weight:800; color:var(--ink); }
+  .ptile .ppts { margin-top:6px; font-weight:700; color:var(--sage-deep); display:flex;align-items:center;justify-content:center;gap:5px; }
+  .ptile-jack{ background:#fdeccf; } .ptile-jack .pic{ background:var(--clay); }
+  .ptile-anya{ background:#efe7f7; } .ptile-anya .pic{ background:var(--lav); }
+  .note-card { background:#fff; border-radius:22px; padding:22px; box-shadow:var(--shadow-soft); margin:34px auto 0; max-width:460px; text-align:center; }
+  .note-card .heart{ font-size:1.4rem; }
+  .note-card h3{ color:var(--sky-deep); margin:8px 0 10px; font-size:1.15rem; }
+  .note-card p{ font-style:italic; color:var(--ink); margin:0; line-height:1.55; }
+
+  /* progress bar on paths view */
+  .progress-wrap { background:#fff; border-radius:20px; padding:16px 18px; box-shadow:var(--shadow-soft); margin-bottom:16px; }
+  .progress-head { display:flex; justify-content:space-between; align-items:baseline; }
+  .progress-head .ptitle { font-weight:800; font-size:1.05rem; }
+  .progress-head .ppct { font-weight:800; color:var(--sage-deep); }
+  .progress-sub { font-size:.85rem; color:var(--ink-soft); margin:2px 0 10px; }
+  .progress-track { height:14px; border-radius:999px; background:var(--bg); overflow:hidden; }
+  .progress-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--sage),var(--sage-deep)); transition:width .35s ease; }
+  .progress-count { font-size:.82rem; font-weight:700; color:var(--ink-soft); margin-top:8px; }
+</style>
+</head>
+<body>
+
+<!-- ======================= KID MISSION MODE (default view) ======================= -->
+<div id="kidApp">
+  <div class="kid-bar">
+    <button class="kid-back" id="kidBack" onclick="kidBack()">←</button>
+    <div class="kid-brand" id="kidBrand" style="flex:1;">✨ Family Adventure OS</div>
+    <div class="kid-pill" id="kidPill" style="display:none;"><span class="av" id="kidAv">🎨</span><span id="kidName">Anya</span>
+      <span class="stars">⭐ <span id="kidStars">0</span></span>
+      <span class="stars" style="color:var(--sage-deep);">💶 €<span id="kidMoney">0</span></span></div>
+    <button class="kid-lock" onclick="openPIN()" title="Parent area">🔒</button>
+  </div>
+  <div id="kidScreen" class="kid-screen"><!-- injected --></div>
+  <button class="emergency-btn" id="emergencyBtn" onclick="openSafety()" style="display:none;">⚠️ Is this an emergency?</button>
+</div>
+
+<!-- Safety-check modal -->
+<div class="modal-bg" id="safetyModal">
+  <div class="modal dark-modal">
+    <h3>🚨 Safety Check: Is it an Emergency?</h3>
+    <p style="color:#e98a8a;font-weight:800;">Always call parents IMMEDIATELY for real emergencies:</p>
+    <div class="safe-yes">🟢 YES: Someone is hurt or bleeding</div>
+    <div class="safe-yes">🟢 YES: Fire, smoke, or danger</div>
+    <div class="safe-yes">🟢 YES: Water / toilet flooding</div>
+    <div class="safe-yes">🟢 YES: Something broke that isn't safe</div>
+    <hr class="safe-divider">
+    <p style="color:#bdb4a8;font-weight:700;">These can WAIT until the work break:</p>
+    <div class="safe-no">❌ NO: Feeling a bit bored</div>
+    <div class="safe-no">❌ NO: Wanting the timer</div>
+    <div class="safe-no">❌ NO: Normal play squabbles</div>
+    <div class="safe-no">❌ NO: Can't find a small toy</div>
+    <div style="text-align:center;margin-top:16px;">
+      <button class="btn-request" onclick="closeSafety()">I understand, back to play!</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN modal -->
+<div class="modal-bg" id="pinModal">
+  <div class="modal" style="max-width:320px;text-align:center;">
+    <h3 id="pinTitle">🔒 Parent area</h3>
+    <p class="hint" id="pinHint">Enter your 4-digit PIN</p>
+    <div class="pindots" id="pinDots"></div>
+    <div class="pinpad" id="pinPad"></div>
+    <button class="btn btn-ghost sm" style="margin-top:12px;" onclick="closePIN()">Cancel</button>
+  </div>
+</div>
+
+<!-- ======================= PARENT AREA (PIN-locked) ======================= -->
+<div id="parentApp" style="display:none;">
+<div class="parent-return">
+  <button class="btn-kid" onclick="lockParent()">🔒 Back to kids' view</button>
+  <span class="hint" style="margin:0;">Parent area — assign, plan, approve, and use AI</span>
+</div>
+
+<header class="appbar">
+  <div class="appbar-inner">
+    <div class="brand">
+      <div class="logo">🏡</div>
+      <div>
+        <h1>Family OS</h1>
+        <p class="sub">First Prototype — we are a family team 💛</p>
+      </div>
+      <div class="spacer"></div>
+      <div class="today-pill" id="todayPill">Today</div>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="today"><span class="emoji">☀️</span>Today</button>
+    <button class="tab" data-tab="calendar"><span class="emoji">🗓️</span>Calendar</button>
+    <button class="tab" data-tab="privilege"><span class="emoji">📱</span>Privileges</button>
+    <button class="tab" data-tab="projects"><span class="emoji">🎨</span>Projects</button>
+    <button class="tab" data-tab="contrib"><span class="emoji">🧹</span>House Jobs</button>
+    <button class="tab" data-tab="work"><span class="emoji">🛡️</span>Work Time</button>
+    <button class="tab" data-tab="reset"><span class="emoji">🌬️</span>Reset</button>
+    <button class="tab" data-tab="points"><span class="emoji">⭐</span>Points</button>
+    <button class="tab" data-tab="braindump"><span class="emoji">🧠</span>Brain Dump</button>
+    <button class="tab" data-tab="data"><span class="emoji">💾</span>Data</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- =================== TODAY =================== -->
+  <section class="panel active" id="panel-today">
+    <div class="section-head">
+      <h2>☀️ Today's Family Focus</h2>
+      <p>One calm look at what matters today. Everything saves to this device automatically.</p>
+    </div>
+
+    <div class="quote" style="margin-bottom:16px;">
+      Everyone contributes. Everyone gets freedom. Privileges come after responsibility.
+      <span class="small">We plan together, we help each other, we keep our home calm.</span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card accent-sage">
+        <h3>🌟 Today's Family Intention</h3>
+        <p class="hint">The one feeling or focus we choose today.</p>
+        <input type="text" id="t_intention" placeholder="e.g. Be kind, be calm, finish what we start" />
+      </div>
+      <div class="card accent-rose">
+        <h3>🛡️ Parent Work Block</h3>
+        <p class="hint">Protected focus time for Mommy &amp; Daddy.</p>
+        <input type="text" id="t_workblock" placeholder="e.g. Daddy 9:00–10:30 · Mommy 13:00–14:30" />
+      </div>
+      <div class="card accent-sky">
+        <h3>🧒 Kids Activity Block</h3>
+        <p class="hint">What the kids are focusing on today.</p>
+        <input type="text" id="t_kids" placeholder="e.g. Lego village 10:00, garden mission after lunch" />
+      </div>
+      <div class="card accent-butter">
+        <h3>🍽️ Meal Plan</h3>
+        <p class="hint">Breakfast · Lunch · Dinner.</p>
+        <input type="text" id="t_meals" placeholder="e.g. Porridge / pasta / chicken &amp; veg" />
+      </div>
+      <div class="card accent-clay">
+        <h3>🧹 One House Contribution</h3>
+        <p class="hint">The single most-helpful job for today.</p>
+        <input type="text" id="t_contrib" placeholder="e.g. Everyone tidies toys before dinner" />
+      </div>
+      <div class="card accent-lav">
+        <h3>🌿 One Wellbeing Activity</h3>
+        <p class="hint">Body, calm, or connection.</p>
+        <input type="text" id="t_wellbeing" placeholder="e.g. 20 min outside walk together" />
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-sage" onclick="saveAll(true)">💾 Save Today</button>
+      <button class="btn btn-ghost" onclick="goTab('calendar')">🗓️ Open Calendar</button>
+    </div>
+  </section>
+
+  <!-- =================== CALENDAR / DAILY RHYTHM =================== -->
+  <section class="panel" id="panel-calendar">
+    <div class="section-head">
+      <h2>🗓️ Daily Rhythm</h2>
+      <p>Our day as visible time blocks — like a school timetable, so it's easy to remember and stick to. Health, helping and making come first. Screen time is only <em>considered</em> after the earning blocks are done. Tap a block to edit; tap ✓ to log the real time it happened.</p>
+    </div>
+
+    <div class="cal-toolbar">
+      <div class="viewseg" id="viewSeg">
+        <button data-view="day" class="on">Day</button>
+        <button data-view="next3">Next 3 days</button>
+        <button data-view="week">Week</button>
+      </div>
+      <span style="flex:1"></span>
+      <div class="daynav" id="dayNav">
+        <button class="btn btn-ghost sm" onclick="stepDay(-1)">←</button>
+        <span class="now" id="dayLabel">Today</span>
+        <button class="btn btn-ghost sm" onclick="stepDay(1)">→</button>
+        <button class="btn btn-sage sm" onclick="stepDay(0)">Today</button>
+      </div>
+    </div>
+
+    <!-- DAY VIEW -->
+    <div id="dayView">
+      <div class="dow-row" id="dowRow"></div>
+      <div class="gate-summary" id="gateSummary"></div>
+      <div class="rhythm-stage">
+        <div class="rhythm-track" id="rhythmTrack"></div>
+      </div>
+      <div class="rhythm-actions">
+        <button class="btn btn-sage sm" onclick="openBlockEditor(null)">＋ Add block</button>
+        <button class="btn btn-ghost sm" onclick="copyToWeekdays()">📋 Copy this day to Mon–Fri</button>
+        <button class="btn btn-ghost sm" onclick="resetRhythm()">↩ Reset to default rhythm</button>
+      </div>
+    </div>
+
+    <!-- MULTI-DAY VIEW (next 3 / week) -->
+    <div id="multiView" style="display:none;">
+      <div class="mini-grid" id="miniGrid"></div>
+      <p class="pill-note" style="margin-top:12px;">Tap any day's title to open its full timetable. Each weekday keeps its own rhythm — weekends can look different from school days.</p>
+    </div>
+  </section>
+
+  <!-- =================== PRIVILEGE =================== -->
+  <section class="panel" id="panel-privilege">
+    <div class="section-head">
+      <h2>📱 Phone &amp; Game Privilege System</h2>
+    </div>
+
+    <div class="card accent-clay">
+      <p style="font-size:1rem; font-weight:600; margin:0 0 6px;">
+        Phones, games, and timers are privileges. They are earned after we show respect,
+        contribute to the house, use our body, use our mind, and create something.
+      </p>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:14px;">
+      <div class="card" data-kid="jack">
+        <h3>🔵 Jack — checklist before phone/game time</h3>
+        <div class="pchecks"></div>
+        <div class="gate">Complete all 5 to continue.</div>
+      </div>
+      <div class="card" data-kid="anya">
+        <h3>🟣 Anya — checklist before phone/game time</h3>
+        <div class="pchecks"></div>
+        <div class="gate">Complete all 5 to continue.</div>
+      </div>
+    </div>
+    <p class="pill-note" style="margin-top:12px;">Note: even when all are checked, the timer is <strong>considered, not guaranteed</strong>. Parents decide based on the day.</p>
+  </section>
+
+  <!-- =================== PROJECTS =================== -->
+  <section class="panel" id="panel-projects">
+    <div class="section-head">
+      <h2>🎨 Kids Project Menu</h2>
+      <p>Pick something to make, build, or explore. Choose a time, press Started, then Finished, then tick Tidied up.</p>
+    </div>
+    <h3 style="margin:6px 2px;">🧍 Solo Projects</h3>
+    <div class="grid cols-3" id="soloGrid"></div>
+    <h3 style="margin:22px 2px 6px;">👥 Team Projects</h3>
+    <div class="grid cols-3" id="teamGrid"></div>
+  </section>
+
+  <!-- =================== CONTRIBUTIONS =================== -->
+  <section class="panel" id="panel-contrib">
+    <div class="section-head">
+      <h2>🧹 House Contribution Board</h2>
+      <p>Small jobs that keep our home calm. Assign each to Jack, Anya, or Both — then tick when done.</p>
+    </div>
+    <div class="card">
+      <div id="contribList"></div>
+    </div>
+  </section>
+
+  <!-- =================== WORK BLOCKS =================== -->
+  <section class="panel" id="panel-work">
+    <div class="section-head">
+      <h2>🛡️ Protected Work Time</h2>
+    </div>
+    <div class="quote" style="margin-bottom:16px;">
+      Our family trips, holidays, adventures, and future plans depend on Mommy and Daddy
+      having focused work time.
+      <span class="small">When we protect work time, we protect our family adventures.</span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card accent-rose">
+        <h3>👩‍💻 Work Block Setup</h3>
+        <label class="field"><span>Parent working</span>
+          <select id="w_parent"><option>Mommy</option><option>Daddy</option><option>Both</option></select>
+        </label>
+        <label class="field"><span>Time block</span>
+          <input type="text" id="w_time" placeholder="e.g. 9:00 – 10:30" />
+        </label>
+        <label class="field"><span>Minimum length (minutes)</span>
+          <input type="number" id="w_min" value="90" min="15" step="15" />
+        </label>
+      </div>
+      <div class="card accent-sky">
+        <h3>🧒 What kids can do during this time</h3>
+        <textarea id="w_kids" placeholder="e.g. Lego, drawing, audiobook, garden play, build a hiding spot..."></textarea>
+        <h3 style="margin-top:14px;">🚨 Emergency-only interruption rule</h3>
+        <p class="hint">We only interrupt focused work for a real emergency.</p>
+        <textarea id="w_emergency" placeholder="Blood, fire, someone hurt, or really not safe = come and tell us. Everything else waits for the break.">Blood, fire, someone hurt, or really not safe = come straight away. Everything else can wait for the break.</textarea>
+      </div>
+    </div>
+
+    <div class="card accent-sage" style="margin-top:14px;">
+      <h3>⏱️ Focus Timer</h3>
+      <p class="hint">Start a protected block. Default is 90 minutes minimum.</p>
+      <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+        <div id="workTimer" style="font-size:2.4rem; font-weight:800; color:var(--sage-deep);">90:00</div>
+        <button class="btn btn-sage" onclick="startWorkTimer()">▶ Start block</button>
+        <button class="btn btn-ghost" onclick="stopWorkTimer()">⏹ Stop</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== RESET =================== -->
+  <section class="panel" id="panel-reset">
+    <div class="section-head">
+      <h2>🌬️ Respect Reset</h2>
+      <p>For when things go off track. This is not punishment — it's how we come back to calm.</p>
+    </div>
+    <div class="card accent-lav">
+      <p style="font-weight:600; margin:0 0 6px;">
+        When I am rude, disrespectful, throwing things, shouting, sulking, or walking away,
+        I pause and reset.
+      </p>
+      <ol class="reset-steps" id="resetSteps">
+        <li data-step="0">Stop</li>
+        <li data-step="1">Breathe</li>
+        <li data-step="2">Say what I feel without being rude</li>
+        <li data-step="3">Repair what I did</li>
+        <li data-step="4">Choose a helpful next action</li>
+      </ol>
+      <div id="resetTimer" style="display:none;">01:00</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-sage" id="resetBtn" onclick="startReset()">🌬️ Start Reset</button>
+        <button class="btn btn-ghost" onclick="endReset()">Done — I'm calm</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== POINTS =================== -->
+  <section class="panel" id="panel-points">
+    <div class="section-head">
+      <h2>⭐ Points &amp; Privileges</h2>
+      <p>Points celebrate the good stuff. They are not money and not pressure — they just show our family teamwork.</p>
+    </div>
+    <div class="score-board">
+      <div class="score-card jack">
+        <div class="who">🔵 Jack</div>
+        <div class="num" id="score_jack">0</div>
+        <div class="pointbtns" data-kid="jack"></div>
+      </div>
+      <div class="score-card anya">
+        <div class="who">🟣 Anya</div>
+        <div class="num" id="score_anya">0</div>
+        <div class="pointbtns" data-kid="anya"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>🌥️ When privileges pause</h3>
+      <p class="hint">We don't frame this harshly. Privileges simply pause when there is:</p>
+      <ul style="margin:0 0 6px; padding-left:20px; color:var(--ink-soft); font-size:.9rem;">
+        <li>disrespect</li><li>throwing things</li><li>shouting at parents</li>
+        <li>refusing contribution</li><li>arguing about the timer</li>
+      </ul>
+      <div class="grid cols-2" style="margin-top:10px;">
+        <div>
+          <button class="btn btn-clay sm" onclick="togglePause('jack')">⏸️ Pause / Resume Jack</button>
+          <div class="pause-banner" id="pause_jack" style="display:none;">🌥️ Privileges are paused until reset and repair are complete.</div>
+        </div>
+        <div>
+          <button class="btn btn-clay sm" onclick="togglePause('anya')">⏸️ Pause / Resume Anya</button>
+          <div class="pause-banner" id="pause_anya" style="display:none;">🌥️ Privileges are paused until reset and repair are complete.</div>
+        </div>
+      </div>
+      <p class="pill-note" style="margin-top:12px;">Tip: a pause pairs perfectly with the <a href="#" onclick="goTab('reset');return false;">Respect Reset</a> tab.</p>
+    </div>
+  </section>
+
+  <!-- =================== BRAIN DUMP =================== -->
+  <section class="panel" id="panel-braindump">
+    <div class="section-head">
+      <h2>🧠 Parent Brain Dump</h2>
+      <p>Paste a messy voice transcript or just type everything in your head. We'll help you sort it.</p>
+    </div>
+    <div class="card accent-sky">
+      <div class="voice-bar" id="voiceBar">
+        <button class="btn btn-clay" id="recBtn" onclick="toggleRecord()"><span class="rec-dot"></span> Record voice note</button>
+        <span class="pill-note" id="recStatus">Speak and it types itself (Chrome/Edge). Or just paste a transcript below.</span>
+      </div>
+      <textarea id="braindump" style="min-height:150px;" placeholder="Dump it all here — or hit Record and talk: pickups, meals, work calls, that thing you keep forgetting, the kids' moods, appointments..."></textarea>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+        <button class="btn btn-sage" onclick="organizeManually()">🗂️ Organize Manually</button>
+        <button class="btn btn-sky" onclick="organizeWithAI()">✨ Auto-sort with AI</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('braindump').value='';saveAll()">Clear</button>
+      </div>
+      <details class="ai-settings">
+        <summary>⚙️ AI settings</summary>
+        <div style="padding-top:10px;">
+          <label class="field"><span>How should the AI run?</span>
+            <select id="ai_mode" onchange="onAIModeChange()">
+              <option value="key">Use my own Anthropic key (this device only)</option>
+              <option value="backend">Use my backend endpoint (recommended for sharing)</option>
+            </select>
+          </label>
+          <div id="ai_keyBox">
+            <label class="field"><span>Anthropic API key (stored only in this browser, never exported)</span>
+              <input type="password" id="ai_key" placeholder="sk-ant-..." autocomplete="off" />
+            </label>
+            <label class="field"><span>Model</span>
+              <select id="ai_model">
+                <option value="claude-opus-4-8">Claude Opus 4.8 — most capable (default)</option>
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — faster &amp; cheaper</option>
+                <option value="claude-haiku-4-5">Claude Haiku 4.5 — cheapest</option>
+              </select>
+            </label>
+          </div>
+          <div id="ai_backendBox" style="display:none;">
+            <label class="field"><span>Backend endpoint URL (your serverless function)</span>
+              <input type="text" id="ai_endpoint" placeholder="https://your-worker.example.com/organize" />
+            </label>
+          </div>
+          <button class="btn btn-ghost sm" onclick="saveAIConfig()">Save AI settings</button>
+        </div>
+      </details>
+      <div class="dev-note">
+        <strong>Security:</strong> In <em>key mode</em>, your key lives only in this browser's localStorage — it is never
+        written into the page or included in Export JSON, and the request goes straight to Anthropic. For a shared/public
+        deploy, host the included <code>ai-backend/worker.js</code> serverless function and switch to <em>backend mode</em>
+        so the key stays server-side. Never hardcode a key into this HTML file.
+      </div>
+    </div>
+
+    <!-- Manual prompts -->
+    <div class="card" id="organizeOutput" style="margin-top:14px; display:none;">
+      <h3>🗂️ Let's sort it — answer these</h3>
+      <div id="organizeQuestions"></div>
+    </div>
+
+    <!-- AI review-before-apply -->
+    <div class="card accent-sage" id="aiReview" style="margin-top:14px; display:none;">
+      <h3>✨ AI suggestions — review before applying</h3>
+      <p class="hint" id="aiSummary"></p>
+      <div id="aiChanges"></div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+        <button class="btn btn-sage" onclick="applyAIChanges()">✓ Apply selected</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('aiReview').style.display='none'">Discard</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== DATA =================== -->
+  <section class="panel" id="panel-data">
+    <div class="section-head">
+      <h2>💾 Data Management</h2>
+      <p>Everything is stored privately in this browser (localStorage). Nothing is sent anywhere.</p>
+    </div>
+    <div class="card">
+      <div class="data-actions">
+        <button class="btn btn-sage" onclick="saveAll(true)">💾 Save</button>
+        <button class="btn btn-clay" onclick="resetToday()">🔄 Reset Today</button>
+        <button class="btn btn-sky" onclick="exportJSON()">⬇️ Export JSON</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">⬆️ Import JSON</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importJSON(event)" />
+      </div>
+      <p class="pill-note" style="margin-top:14px;">
+        <strong>Reset Today</strong> clears the daily checklist, project statuses, today's contributions, and the brain dump —
+        but keeps your weekly calendar, points, and work-block settings.
+      </p>
+      <div class="dev-note">
+        <strong>To deploy on GitHub Pages:</strong> save this file as <code>index.html</code>, push it to a repo,
+        then enable Pages (Settings → Pages → deploy from branch). Your dashboard will be live at
+        <code>https://&lt;username&gt;.github.io/&lt;repo&gt;/</code>.
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h3>☁️ Cloud Sync <span id="syncDot" style="font-size:.8rem;font-weight:700;margin-left:8px;"></span></h3>
+      <p class="hint">Share one live family record across all phones + the TV. Off by default. Enter the SAME Project URL, key, and Family Code on every device. (Setup steps are in the code comments / your Supabase setup card.)</p>
+      <label class="field"><span>Supabase Project URL</span>
+        <input type="text" id="sync_url" placeholder="https://xxxxxxxx.supabase.co" />
+      </label>
+      <label class="field"><span>Supabase anon public key</span>
+        <input type="password" id="sync_anon" placeholder="eyJ... (public anon key)" autocomplete="off" />
+      </label>
+      <label class="field"><span>Family Code (make one up — same on every device)</span>
+        <input type="text" id="sync_code" placeholder="e.g. ADAMSKI-7K2" />
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:.9rem;font-weight:600;">
+        <input type="checkbox" id="sync_enabled" style="width:20px;height:20px;accent-color:var(--sage-deep);"> Enable sync on this device
+      </label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-sage sm" onclick="saveSyncConfig()">💾 Save sync settings</button>
+        <button class="btn btn-sky sm" onclick="syncPull(true)">⬇️ Pull family data now</button>
+        <button class="btn btn-ghost sm" onclick="syncPush(); toast('Pushed this device ☁️')">⬆️ Push this device</button>
+      </div>
+      <div class="dev-note">First device you enable becomes the family's starting data. Every other device that enters the same code will adopt it. The key/code are stored only in this browser and are never in Export JSON.</div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h3>🔑 Parent PIN</h3>
+      <p class="hint">Guards the parent area. Default is 1234.</p>
+      <label class="field" style="max-width:200px;"><span>4-digit PIN</span>
+        <input type="text" id="pin_field" inputmode="numeric" maxlength="4" placeholder="1234" />
+      </label>
+      <button class="btn btn-sage sm" onclick="savePIN()">Save PIN</button>
+    </div>
+
+    <p class="footer-note">Family OS — First Prototype · made with calm 💛</p>
+  </section>
+
+</main>
+</div><!-- /#parentApp -->
+
+<!-- Calendar block editor modal -->
+<div class="modal-bg" id="blockModal">
+  <div class="modal">
+    <h3 id="blockModalTitle">Edit block</h3>
+    <label class="field"><span>What is it?</span>
+      <input type="text" id="bm_title" placeholder="e.g. Outside play, Lego project, Lunch" />
+    </label>
+    <div class="timepair" style="display:flex;gap:10px;">
+      <label class="field" style="flex:1;"><span>Start</span><input type="time" id="bm_start" /></label>
+      <label class="field" style="flex:1;"><span>End</span><input type="time" id="bm_end" /></label>
+    </div>
+    <label class="field"><span>Type</span></label>
+    <div class="catpick" id="bm_cats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"></div>
+    <div class="timepair" style="display:flex;gap:10px;margin-top:12px;">
+      <label class="field" style="flex:1;"><span>Icon (emoji, optional)</span><input type="text" id="bm_icon" placeholder="🏊" maxlength="4" /></label>
+      <label class="field" style="flex:1;"><span>For whom</span>
+        <select id="bm_who"><option value="both">Both kids</option><option value="jack">Jack only</option><option value="anya">Anya only</option></select>
+      </label>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:18px;">
+      <button class="btn btn-sage" onclick="saveBlock()">Save</button>
+      <button class="btn btn-ghost" onclick="closeBlockEditor()">Cancel</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-clay sm" id="bm_delete" onclick="deleteBlock()">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================================
+   FAMILY OS — application logic
+   State is a single object persisted to localStorage under STORAGE_KEY.
+   ========================================================================== */
+
+const STORAGE_KEY = "familyOS.v1";
+const KIDS = ["jack", "anya"];
+
+/* ---------------------------------------------------------------------------
+   AI CONFIG. Two modes, chosen in the Brain Dump → AI settings panel:
+     • "backend"  → POST {text, context} to YOUR serverless function, which holds
+                    the API key server-side and proxies to api.anthropic.com.
+                    Deploy the included ai-backend/worker.js (Cloudflare Worker).
+     • "key"      → call api.anthropic.com directly from the browser using a key
+                    the user pastes. The key lives ONLY in this browser's
+                    localStorage (key: familyOS.ai), is never written into this
+                    file, and is excluded from Export JSON.
+   DO NOT hardcode an Anthropic API key into this HTML file — anyone who opens
+   the page would see it. The key-mode path is for the user's own devices only.
+   --------------------------------------------------------------------------- */
+const AI_CONFIG_KEY = "familyOS.ai";
+const DEFAULT_AI = { mode:"key", key:"", model:"claude-opus-4-8", endpoint:"" };
+function loadAIConfig(){ try { return Object.assign({}, DEFAULT_AI, JSON.parse(localStorage.getItem(AI_CONFIG_KEY)||"{}")); } catch(e){ return {...DEFAULT_AI}; } }
+function saveAIConfigObj(c){ localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(c)); }
+
+/* ============================================================================
+   CLOUD SYNC (optional) — "Family Code" model via Supabase.
+   ----------------------------------------------------------------------------
+   Off by default. When configured + enabled, every device sharing the same
+   Family Code reads/writes ONE shared row in your Supabase table, so stars,
+   money, calendar, etc. stay in sync across all phones + the TV.
+
+   Config (URL, anon key, family code) lives in its own localStorage entry
+   (familyOS.sync) — it is NOT part of the exported app state.
+
+   ---- ONE-TIME SUPABASE SETUP (you do this once) ----------------------------
+   1. Create a free project at supabase.com → it gives you a Project URL and a
+      public "anon" key (Settings → API).
+   2. In the SQL editor, run:
+
+        create table family_state (
+          code text primary key,
+          data jsonb,
+          updated_at timestamptz default now()
+        );
+        alter table family_state enable row level security;
+        create policy "family rw" on family_state
+          for all using (true) with check (true);
+
+      (The whole row is gated by the secret Family Code; anyone without the code
+       can't guess another family's row. For stricter security later, move writes
+       behind an edge function — but this is fine for a private family app.)
+   3. In the app: Parent area → Data → "Cloud Sync", paste the Project URL +
+      anon key, pick a Family Code (e.g. ADAMSKI-7K2), Save, then Enable.
+   4. On every other device: enter the SAME URL, key, and Family Code.
+   --------------------------------------------------------------------------- */
+const SYNC_KEY = "familyOS.sync";
+const DEFAULT_SYNC = { enabled:false, url:"", anon:"", code:"" };
+function loadSync(){ try { return Object.assign({}, DEFAULT_SYNC, JSON.parse(localStorage.getItem(SYNC_KEY)||"{}")); } catch(e){ return {...DEFAULT_SYNC}; } }
+function saveSync(c){ localStorage.setItem(SYNC_KEY, JSON.stringify(c)); }
+function syncReady(){ const c=loadSync(); return c.enabled && c.url && c.anon && c.code; }
+
+let syncTimer=null, syncPulling=false, lastPushedJSON="";
+function syncHeaders(c){ return { "Content-Type":"application/json", "apikey":c.anon, "Authorization":"Bearer "+c.anon, "Prefer":"resolution=merge-duplicates,return=minimal" }; }
+
+/* debounced upsert of the whole state to the family row */
+function syncPush(){
+  if(!syncReady() || syncPulling) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(async ()=>{
+    const c = loadSync();
+    const body = JSON.stringify([{ code:c.code, data: state, updated_at: new Date().toISOString() }]);
+    if(body===lastPushedJSON) return;
+    try {
+      const res = await fetch(c.url.replace(/\/$/,"")+"/rest/v1/family_state?on_conflict=code", {
+        method:"POST", headers: syncHeaders(c), body
+      });
+      if(res.ok){ lastPushedJSON=body; setSyncDot("ok"); }
+      else setSyncDot("err");
+    } catch(e){ setSyncDot("err"); }
+  }, 700);
+}
+
+/* pull the shared row; if newer than ours, adopt it */
+async function syncPull(announce){
+  if(!syncReady()) return;
+  const c = loadSync();
+  try {
+    const res = await fetch(c.url.replace(/\/$/,"")+"/rest/v1/family_state?code=eq."+encodeURIComponent(c.code)+"&select=data,updated_at", { headers: syncHeaders(c) });
+    if(!res.ok){ setSyncDot("err"); return; }
+    const rows = await res.json();
+    if(rows && rows[0] && rows[0].data){
+      syncPulling = true;
+      state = Object.assign(defaultState(), rows[0].data);
+      // re-run the same normalizers loadState uses
+      if(!state.kids||!state.kids.jack) state.kids=defaultState().kids;
+      KIDS.forEach(k=>{ state.kids[k]=Object.assign({stars:0,money:0,missionsDone:0,done:{},timerRequested:false,rewards:[]}, state.kids[k]||{}); });
+      if(!state.rhythm||!state.rhythm.days||!state.rhythm.days.mon) state.rhythm=defaultRhythm();
+      if(!state.rhythm.log) state.rhythm.log={};
+      if(!state.hotspot) state.hotspot={date:"",zones:{},doneBy:{},done:false};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      syncPulling = false;
+      renderKid(); if(document.getElementById("parentApp").style.display!=="none") renderAll();
+      setSyncDot("ok");
+      if(announce) toast("Synced from the family ☁️");
+    } else if(announce){ toast("Connected — this device will start the family data ☁️"); syncPush(); }
+  } catch(e){ syncPulling=false; setSyncDot("err"); }
+}
+
+let syncPollTimer=null;
+function startSyncLoop(){
+  stopSyncLoop();
+  if(!syncReady()) return;
+  syncPull(false);
+  syncPollTimer = setInterval(()=>syncPull(false), 8000); // light poll every 8s
+}
+function stopSyncLoop(){ if(syncPollTimer){ clearInterval(syncPollTimer); syncPollTimer=null; } }
+function setSyncDot(stStr){
+  const el=document.getElementById("syncDot"); if(!el) return;
+  el.textContent = stStr==="ok" ? "☁️ Synced" : stStr==="err" ? "⚠️ Sync error" : "☁️ …";
+  el.style.color = stStr==="err" ? "var(--clay-deep)" : "var(--sage-deep)";
+}
+
+/* ---- Static content definitions ---- */
+const PRIV_ITEMS = [
+  "I spoke respectfully",
+  "I completed one house contribution",
+  "I completed one creative/project activity",
+  "I moved my body or played outside",
+  "I tidied up after myself"
+];
+
+const SOLO_PROJECTS = [
+  ["Drawing","✏️"],["Pastels","🎨"],["Coloring page","🖍️"],["Lego build","🧱"],
+  ["Train set story/build","🚂"],["Play-Doh","🟡"],["Make a book","📖"],
+  ["Cardboard creation","📦"],["Cutting and sticking project","✂️"],
+  ["Build a hiding spot outside","🌳"],["Garden exploration","🔍"],
+  ["Cat observation journal","🐈"],["Make a map of the garden","🗺️"]
+];
+const TEAM_PROJECTS = [
+  ["Build something together","🤝"],["Create a train station","🚉"],
+  ["Make a cardboard house","🏠"],["Prepare a simple snack","🥪"],
+  ["Garden mission","🌱"],["Treasure hunt","🗝️"],["Make a show/performance","🎭"],
+  ["Build a Lego village","🏘️"],["Create a family newspaper","📰"]
+];
+
+const CONTRIBUTIONS = [
+  "Bring plates back","Rinse plates","Load dishwasher","Empty dishwasher",
+  "Fold laundry for 20 minutes","Tidy toys","Make bed","Help prepare breakfast",
+  "Help set table","Help clear table","Water plants","Sweep small area","Help with cats"
+];
+
+const POINT_TYPES = [
+  ["Respect","🙏"],["Contribution","🧹"],["Creative project","🎨"],
+  ["Movement/outside play","🏃"],["Tidied after activity","🧺"],["Accepted timer calmly","⏱️"]
+];
+
+const ORGANIZE_QUESTIONS = [
+  "What are the top 3 priorities?",
+  "What meals need planning?",
+  "What school/pickup tasks exist?",
+  "What house jobs matter?",
+  "What work blocks need protection?",
+  "What do the kids need to understand today?"
+];
+
+const DOW = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const DOW_SHORT = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+const DOW_KEY = ["mon","tue","wed","thu","fri","sat","sun"];
+
+/* Time-block categories. earn=true means it counts toward "earning" screen time. */
+const CATS = {
+  wake:    {label:"Wake & self-care", emoji:"🌅", color:"#d9cbe9", earn:true},
+  meal:    {label:"Meal",             emoji:"🍽️", color:"#f3d9a4", earn:false},
+  move:    {label:"Move / outside",   emoji:"🏃", color:"#bcdca0", earn:true},
+  project: {label:"Project / create", emoji:"🎨", color:"#a9c8d8", earn:true},
+  learn:   {label:"Learn / quiet",    emoji:"📚", color:"#9cc7b5", earn:true},
+  help:    {label:"House help",        emoji:"🧹", color:"#e6a57e", earn:true},
+  work:    {label:"Parent work",      emoji:"🛡️", color:"#e7b3b3", earn:false},
+  family:  {label:"Family time",      emoji:"💛", color:"#f0d6c2", earn:false},
+  school:  {label:"School",           emoji:"🎒", color:"#d9e8f5", earn:false},
+  routine: {label:"Routine",          emoji:"🪥", color:"#cfe7df", earn:true},
+  sleep:   {label:"Wind-down / sleep",emoji:"😴", color:"#c7d0de", earn:false},
+  screen:  {label:"Screen (earned)",  emoji:"📱", color:"#c3b3d6", earn:false, screen:true},
+};
+const CAT_KEYS = Object.keys(CATS);
+const RHYTHM_V = 5; // bump to re-seed default schedules on load
+
+/* Default rhythms. Weekday = school flow; weekend = no-school flow.
+   Each block can carry its OWN icon (so "Swimming" shows 🏊, not the generic
+   move icon) and a `who` tag: "both" | "jack" | "anya" (for differing bedtimes).
+   Anya (5) winds down earlier (~9:30pm); Jack later (~10–10:30pm). */
+function defaultDayBlocks(weekend){
+  // mk(start,end,title,cat,icon,who)
+  const mk=(start,end,title,cat,icon,who)=>({id:rid(),start,end,title,cat,icon:icon||"",who:who||"both"});
+  if(weekend){
+    return [
+      mk("08:00","08:45","Wake & morning routine","routine","🌅"),
+      mk("08:45","09:30","Breakfast together","meal","🥣"),
+      mk("09:30","10:30","Creative time","project","🎨"),
+      mk("10:30","11:30","Move / outside / play","move","🏃"),
+      mk("11:30","12:30","Help in the house","help","🫶"),
+      mk("12:30","13:15","Lunch","meal","🍽️"),
+      mk("13:15","14:30","Quiet / reading time","learn","📚"),
+      mk("14:30","16:00","Family outing / play","family","🌳"),
+      mk("16:00","16:45","Screen timer — earned","screen","📱"),
+      mk("16:45","17:45","Dinner & help clear","meal","🍽️"),
+      mk("17:45","19:00","Family wind-down","family","💛"),
+      mk("19:30","20:30","Anya: bath, books, bed","sleep","🛁","anya"),
+      mk("20:30","21:30","Jack: wind-down & books","sleep","📖","jack"),
+    ];
+  }
+  return [
+    // ---- Shared morning ----
+    mk("07:00","07:45","Wake, dress, breakfast","wake","🌅"),
+    mk("07:45","08:15","Brush teeth & get ready","routine","🪥"),
+    mk("08:30","15:30","School","school","🎒"),
+    // ---- Shared afternoon/evening ----
+    mk("16:30","17:15","Home: drop bags, snack & a drink","meal","🎒"),
+    mk("17:30","18:30","Swimming","move","🏊"),
+    mk("18:45","19:30","Screen timer — earned","screen","📱"),
+    mk("19:30","20:00","Dinner","meal","🍽️"),
+    mk("20:00","20:45","Play calmly","family","🧸"),
+    // ---- Anya winds down earlier: bath, then a bedtime story ~9:30 ----
+    mk("20:45","21:30","Anya: bath & wind-down","routine","🛁","anya"),
+    mk("21:30","22:00","Anya: bedtime story & sleep","sleep","📖","anya"),
+    // ---- Jack a bit later (~10–10:30) ----
+    mk("21:30","22:30","Jack: evening routine & bed","routine","📖","jack"),
+  ];
+}
+function defaultRhythm(){
+  const r = { v:RHYTHM_V, days:{}, log:{} };
+  DOW_KEY.forEach((k,i)=>{ r.days[k] = defaultDayBlocks(i>=5); });
+  return r;
+}
+/* Icon for a block: its own icon if set, else the category's emoji. */
+function blockIcon(b){ return b.icon || (CATS[b.cat]||CATS.project).emoji; }
+function rid(){ return "b"+Math.random().toString(36).slice(2,9); }
+
+/* ---- State ---- */
+let state = loadState();
+let resetInterval = null, resetStep = 0;
+let workInterval = null;
+
+function todayKey(d=new Date()){ const x=new Date(d); return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); }
+
+function defaultState(){
+  return {
+    today: { date: todayKey(), intention:"", workblock:"", kids:"", meals:"", contrib:"", wellbeing:"" },
+    privilege: { jack:[false,false,false,false,false], anya:[false,false,false,false,false] },
+    projects: {},          // id -> {time, status, tidied}
+    contributions: {},     // index -> {assigned, done}
+    rhythm: defaultRhythm(),// days: {mon:[blocks]...}, log: {dateKey:{blockId:"HH:MM"}}
+    work: { parent:"Mommy", time:"", min:90, kids:"", emergency:"Blood, fire, someone hurt, or really not safe = come straight away. Everything else can wait for the break." },
+    points: { jack:0, anya:0 },
+    paused: { jack:false, anya:false },
+    braindump: "",
+    organizeAnswers: {},
+    // ---- Kid Mission mode ----
+    dayType: "",            // "" until chosen today: school | weekend | special
+    kids: {
+      jack: { stars:0, money:0, missionsDone:0, done:{}, timerRequested:false, rewards:[], routine:{} },
+      anya: { stars:0, money:0, missionsDone:0, done:{}, timerRequested:false, rewards:[], routine:{} }
+    },
+    familyTeamPoints: 0,    // earned via Hotspot Attack
+    hotspot: { date:"", zones:{}, doneBy:{}, done:false }, // zones picked + who finished today
+    pin: "1234"             // parent PIN (changeable in parent → Data)
+  };
+}
+
+function loadState(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultState();
+    const s = Object.assign(defaultState(), JSON.parse(raw));
+    // normalize rhythm shape (older saves / imports may lack parts)
+    if(!s.rhythm || typeof s.rhythm!=="object") s.rhythm = defaultRhythm();
+    if(!s.rhythm.days || !s.rhythm.days.mon) s.rhythm.days = defaultRhythm().days;
+    if(!s.rhythm.log) s.rhythm.log = {};
+    // re-seed the default schedules when the built-in template version changes,
+    // BUT keep the user's own edits if they've customised any day.
+    if((s.rhythm.v||1) < RHYTHM_V && !s.rhythm.userEdited){
+      const log=s.rhythm.log; s.rhythm=defaultRhythm(); s.rhythm.log=log;
+    }
+    if(typeof s.rhythm.v!=="number") s.rhythm.v=RHYTHM_V;
+    // normalize kid-mode shape (older saves lack it)
+    if(!s.kids || !s.kids.jack) s.kids = defaultState().kids;
+    KIDS.forEach(k=>{ s.kids[k] = Object.assign({stars:0,money:0,missionsDone:0,done:{},timerRequested:false,rewards:[],routine:{}}, s.kids[k]||{}); if(!Array.isArray(s.kids[k].rewards)) s.kids[k].rewards=[]; if(!s.kids[k].routine) s.kids[k].routine={}; });
+    if(typeof s.dayType!=="string") s.dayType="";
+    if(typeof s.familyTeamPoints!=="number") s.familyTeamPoints=0;
+    if(!s.hotspot || typeof s.hotspot!=="object") s.hotspot={date:"",zones:{},doneBy:{},done:false};
+    if(!s.hotspot.zones) s.hotspot.zones={}; if(!s.hotspot.doneBy) s.hotspot.doneBy={};
+    if(!s.pin) s.pin="1234";
+    // daily rollover: if stored "today" is an old date, reset daily-only bits
+    if(s.today.date !== todayKey()){
+      const fresh = defaultState();
+      s.today = fresh.today;
+      s.privilege = fresh.privilege;
+      s.projects = {};
+      s.contributions = {};
+      s.organizeAnswers = {};
+      s.dayType = "";                       // ask the day-type again each new day
+      KIDS.forEach(k=>{ s.kids[k].done={}; s.kids[k].missionsDone=0; s.kids[k].timerRequested=false; s.kids[k].routine={}; }); // keep stars + money + rewards
+      s.hotspot = { date:"", zones:{}, doneBy:{}, done:false };    // fresh hotspot each day
+      // keep rhythm, points, work, braindump, paused, kid stars/money/rewards, familyTeamPoints, pin
+    }
+    return s;
+  } catch(e){ return defaultState(); }
+}
+
+function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); syncPush(); }
+
+/* ---- Toast ---- */
+let toastT;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove("show"), 2200);
+}
+
+/* ---- Tabs ---- */
+function goTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===name));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active", p.id==="panel-"+name));
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+document.getElementById("tabs").addEventListener("click", e=>{
+  const t = e.target.closest(".tab"); if(t) goTab(t.dataset.tab);
+});
+
+/* ============================ TODAY ============================ */
+function bindToday(){
+  const map = {t_intention:"intention",t_workblock:"workblock",t_kids:"kids",t_meals:"meals",t_contrib:"contrib",t_wellbeing:"wellbeing"};
+  for(const [id,key] of Object.entries(map)){
+    const el = document.getElementById(id);
+    el.value = state.today[key] || "";
+    el.addEventListener("input", ()=>{ state.today[key]=el.value; persist(); });
+  }
+}
+
+/* ============================ PRIVILEGE ============================ */
+function renderPrivilege(){
+  document.querySelectorAll("#panel-privilege .card[data-kid]").forEach(card=>{
+    const kid = card.dataset.kid;
+    const box = card.querySelector(".pchecks");
+    box.innerHTML = "";
+    PRIV_ITEMS.forEach((item,i)=>{
+      const done = state.privilege[kid][i];
+      const row = document.createElement("label");
+      row.className = "check-row" + (done?" done":"");
+      row.innerHTML = `<input type="checkbox" ${done?"checked":""}><span class="txt">${item}</span>`;
+      row.querySelector("input").addEventListener("change", e=>{
+        state.privilege[kid][i] = e.target.checked; persist(); renderPrivilege();
+      });
+      box.appendChild(row);
+    });
+    const gate = card.querySelector(".gate");
+    const all = state.privilege[kid].every(Boolean);
+    if(all){ gate.classList.add("open"); gate.textContent = "✅ Timer can be considered."; }
+    else { gate.classList.remove("open"); const left = state.privilege[kid].filter(x=>!x).length; gate.textContent = `Complete all 5 to continue · ${left} to go`; }
+  });
+}
+
+/* ============================ PROJECTS ============================ */
+function projId(name){ return name.toLowerCase().replace(/[^a-z]+/g,"_"); }
+
+function renderProjects(){
+  renderProjectGrid("soloGrid", SOLO_PROJECTS);
+  renderProjectGrid("teamGrid", TEAM_PROJECTS);
+}
+function renderProjectGrid(gridId, list){
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = "";
+  list.forEach(([name,emoji])=>{
+    const id = projId(name);
+    const p = state.projects[id] || {time:60, status:"idle", tidied:false};
+    const el = document.createElement("div");
+    el.className = "proj" + (p.status==="running"?" selected":"") + (p.status==="done"?" finished":"");
+    const statusLabel = p.status==="running"?"In progress":p.status==="done"?"Finished":"Not started";
+    const statusClass = p.status==="running"?"status-running":p.status==="done"?"status-done":"status-idle";
+    el.innerHTML = `
+      <div class="proj-title">${emoji} ${name}</div>
+      <div class="proj-meta">Suggested time</div>
+      <div class="timepick">
+        ${[30,60,90].map(t=>`<div class="timechip ${p.time===t?"on":""}" data-t="${t}">${t}m</div>`).join("")}
+      </div>
+      <div class="proj-actions">
+        <button class="btn btn-sage sm" data-act="start">▶ Started</button>
+        <button class="btn btn-sky sm" data-act="finish">✓ Finished</button>
+        <span class="proj-status ${statusClass}">${statusLabel}</span>
+      </div>
+      <label class="tidy"><input type="checkbox" ${p.tidied?"checked":""} data-act="tidy"> Tidied up</label>
+    `;
+    el.querySelectorAll(".timechip").forEach(c=>c.addEventListener("click",()=>{
+      p.time = parseInt(c.dataset.t); state.projects[id]=p; persist(); renderProjectGrid(gridId,list);
+    }));
+    el.querySelector('[data-act="start"]').addEventListener("click",()=>{
+      p.status="running"; state.projects[id]=p; persist(); renderProjectGrid(gridId,list); toast(`Started: ${name} ⏳`);
+    });
+    el.querySelector('[data-act="finish"]').addEventListener("click",()=>{
+      p.status="done"; state.projects[id]=p; persist(); renderProjectGrid(gridId,list); toast(`Finished: ${name} 🎉`);
+    });
+    el.querySelector('[data-act="tidy"]').addEventListener("change",e=>{
+      p.tidied=e.target.checked; state.projects[id]=p; persist();
+    });
+    grid.appendChild(el);
+  });
+}
+
+/* ============================ CONTRIBUTIONS ============================ */
+function renderContributions(){
+  const list = document.getElementById("contribList");
+  list.innerHTML = "";
+  CONTRIBUTIONS.forEach((name,i)=>{
+    const c = state.contributions[i] || {assigned:null, done:false};
+    const row = document.createElement("div");
+    row.className = "contrib" + (c.done?" done":"");
+    row.innerHTML = `
+      <input type="checkbox" ${c.done?"checked":""} style="width:20px;height:20px;accent-color:var(--sage-deep);">
+      <span class="name">${name}</span>
+      <div class="assign">
+        <button data-who="jack" class="${c.assigned==='jack'?'on-jack':''}">Jack</button>
+        <button data-who="anya" class="${c.assigned==='anya'?'on-anya':''}">Anya</button>
+        <button data-who="both" class="${c.assigned==='both'?'on-both':''}">Both</button>
+      </div>`;
+    row.querySelector("input").addEventListener("change",e=>{
+      c.done=e.target.checked; state.contributions[i]=c; persist(); renderContributions();
+    });
+    row.querySelectorAll(".assign button").forEach(b=>b.addEventListener("click",()=>{
+      c.assigned = c.assigned===b.dataset.who ? null : b.dataset.who;
+      state.contributions[i]=c; persist(); renderContributions();
+    }));
+    list.appendChild(row);
+  });
+}
+
+/* ============================ DAILY RHYTHM ENGINE ============================ */
+let selectedDate = new Date();
+let currentView = "day";          // day | next3 | week
+let editingBlockId = null;
+let editingDayKey = null;
+let editingCat = "project";
+
+/* date / time helpers */
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); x.setHours(0,0,0,0); return x; }
+function dowKeyOf(d){ return DOW_KEY[(d.getDay()+6)%7]; }
+function dowIdx(d){ return (d.getDay()+6)%7; }
+function fmtShort(d){ return d.toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"}); }
+function blocksFor(d){ return state.rhythm.days[dowKeyOf(d)] || []; }
+function t2m(t){ const [h,m]=t.split(":").map(Number); return h*60+m; }
+function m2t(m){ m=((m%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
+function durLabel(a,b){ let d=t2m(b)-t2m(a); if(d<0) d+=1440; const h=Math.floor(d/60), mm=d%60; return (h?h+"h":"")+(mm?(h?" ":"")+mm+"m":(h?"":"0m")); }
+function nowMin(){ const n=new Date(); return n.getHours()*60+n.getMinutes(); }
+function isToday(d){ return todayKey(d)===todayKey(); }
+function logFor(d){ return state.rhythm.log[todayKey(d)] || {}; }
+
+/* compute day window in minutes (rounded to hour, padded) */
+function dayWindow(blocks){
+  if(!blocks.length) return [6*60, 21*60];
+  let lo=Infinity, hi=-Infinity;
+  blocks.forEach(b=>{ lo=Math.min(lo,t2m(b.start)); hi=Math.max(hi,t2m(b.end)); });
+  lo = Math.floor(lo/60)*60; hi = Math.ceil(hi/60)*60;
+  return [lo, hi];
+}
+
+/* MAIN dispatcher */
+function renderRhythm(){ renderDowRow(); updateDayLabel();
+  if(currentView==="day"){ document.getElementById("dayView").style.display="block"; document.getElementById("multiView").style.display="none"; renderDay(); }
+  else { document.getElementById("dayView").style.display="none"; document.getElementById("multiView").style.display="block"; renderMulti(currentView==="next3"?3:7); }
+}
+
+function updateDayLabel(){
+  const el=document.getElementById("dayLabel");
+  el.textContent = (isToday(selectedDate)?"Today · ":"") + fmtShort(selectedDate);
+}
+
+/* weekday chips (the current week containing selectedDate) */
+function renderDowRow(){
+  const row=document.getElementById("dowRow"); row.innerHTML="";
+  const mon = addDays(selectedDate, -dowIdx(selectedDate));
+  for(let i=0;i<7;i++){
+    const d=addDays(mon,i);
+    const chip=document.createElement("div");
+    chip.className="dow-chip"+(todayKey(d)===todayKey(selectedDate)?" on":"")+(isToday(d)?" is-today":"");
+    chip.innerHTML=`<div class="d">${DOW_SHORT[i]}</div><div class="n">${d.getDate()}</div>`;
+    chip.onclick=()=>{ selectedDate=d; renderRhythm(); };
+    row.appendChild(chip);
+  }
+}
+
+/* gate summary: earning blocks before first screen block */
+function renderGateSummary(blocks, d){
+  const el=document.getElementById("gateSummary");
+  const log=logFor(d);
+  const sorted=[...blocks].sort((a,b)=>t2m(a.start)-t2m(b.start));
+  const firstScreen=sorted.find(b=>CATS[b.cat] && CATS[b.cat].screen);
+  const cutoff=firstScreen?t2m(firstScreen.start):24*60;
+  const earners=sorted.filter(b=>CATS[b.cat] && CATS[b.cat].earn && t2m(b.start)<cutoff);
+  const doneCount=earners.filter(b=>log[b.id]).length;
+  const total=earners.length;
+  const pct=total?Math.round(doneCount/total*100):100;
+  const earnMins=earners.reduce((s,b)=>s+(t2m(b.end)-t2m(b.start)),0);
+  const eh=Math.floor(earnMins/60), em=earnMins%60;
+  const open=total>0 && doneCount===total;
+  el.style.setProperty("--p",pct);
+  el.innerHTML=`
+    <div class="ring" style="--p:${pct}"><span>${pct}%</span></div>
+    <div class="txt">
+      <b>${eh}h${em?" "+em+"m":""} of healthy time before any screen</b>
+      <p>${total?`${doneCount} of ${total} earning blocks done${firstScreen?` · screen at ${firstScreen.start}`:""}`:"No earning blocks set for this day."}</p>
+    </div>
+    <div class="verdict ${open?"open":"locked"}">${open?"✅ Timer can be considered":"🔒 Keep earning"}</div>`;
+}
+
+/* DAY view — proportional 3D timeline */
+function renderDay(){
+  const blocks=blocksFor(selectedDate);
+  renderGateSummary(blocks, selectedDate);
+  const track=document.getElementById("rhythmTrack");
+  const PX=1.05;
+  buildTimeline(track, blocks, selectedDate, PX, false);
+}
+
+function buildTimeline(track, blocks, d, PX, mini){
+  const [lo,hi]=dayWindow(blocks);
+  const height=(hi-lo)*PX;
+  track.style.height=height+"px";
+  track.innerHTML="";
+  const log=logFor(d);
+  const sorted=[...blocks].sort((a,b)=>t2m(a.start)-t2m(b.start));
+  const firstScreen=sorted.find(b=>CATS[b.cat]&&CATS[b.cat].screen);
+  const cutoff=firstScreen?t2m(firstScreen.start):24*60;
+  const earnersBefore=sorted.filter(b=>CATS[b.cat]&&CATS[b.cat].earn&&t2m(b.start)<cutoff);
+  const gateOpen=earnersBefore.length>0 && earnersBefore.every(b=>log[b.id]);
+
+  if(!mini){
+    for(let m=lo;m<=hi;m+=60){
+      const y=(m-lo)*PX;
+      const line=document.createElement("div"); line.className="hourline"; line.style.top=y+"px"; track.appendChild(line);
+      const lbl=document.createElement("div"); lbl.className="hourlbl"; lbl.style.top=y+"px"; lbl.textContent=m2t(m); track.appendChild(lbl);
+    }
+  }
+  blocks.forEach(b=>{
+    const c=CATS[b.cat]||CATS.project;
+    const top=(t2m(b.start)-lo)*PX;
+    let h=(t2m(b.end)-t2m(b.start))*PX; if(h<0)h+=1440*PX;
+    const done=!!log[b.id];
+    const locked=c.screen && !gateOpen;
+    const ic=blockIcon(b);
+    const whoTag = b.who==="jack"?" 🔵":b.who==="anya"?" 🟣":"";
+    if(mini){
+      const el=document.createElement("div");
+      el.className="mini-blk"+(done?" done":"");
+      el.style.top=top+"px"; el.style.height=Math.max(10,h-2)+"px"; el.style.background=c.color;
+      el.title=`${b.start}–${b.end} ${b.title}`;
+      el.textContent=`${ic} ${b.title}`;
+      track.appendChild(el);
+    } else {
+      const el=document.createElement("div");
+      el.className="blk"+(c.earn?" earn":"")+(done?" done":"")+(locked?" locked":"")+(h<46?" tiny":"");
+      el.style.top=top+"px"; el.style.height=Math.max(34,h-4)+"px"; el.style.background=c.color;
+      el.innerHTML=`
+        <div class="bt">${ic} ${b.title}${whoTag}</div>
+        <div class="bm">${b.start}–${b.end} · ${durLabel(b.start,b.end)}${locked?" · earn first":""}</div>
+        <div class="bdone">${done?"✓ "+log[b.id]:"mark ✓"}</div>`;
+      el.onclick=()=>openBlockEditor(b.id);
+      el.querySelector(".bdone").onclick=(ev)=>{ ev.stopPropagation(); toggleBlockDone(b.id); };
+      track.appendChild(el);
+    }
+  });
+  // now line
+  if(isToday(d)){
+    const nm=nowMin();
+    if(nm>=lo && nm<=hi){
+      const y=(nm-lo)*PX;
+      if(mini){ const nl=document.createElement("div"); nl.style.cssText=`position:absolute;left:0;right:0;top:${y}px;border-top:2px solid var(--clay-deep);z-index:5;`; track.appendChild(nl); }
+      else {
+        const nl=document.createElement("div"); nl.className="nowline"; nl.style.top=y+"px"; track.appendChild(nl);
+        const nd=document.createElement("div"); nd.className="nowdot"; nd.style.top=y+"px"; track.appendChild(nd);
+      }
+    }
+  }
+}
+
+/* MULTI-day view (next 3 / week) */
+function renderMulti(n){
+  const grid=document.getElementById("miniGrid");
+  grid.style.gridTemplateColumns=`repeat(${n}, minmax(${n>3?120:200}px,1fr))`;
+  grid.innerHTML="";
+  const start = n===3 ? new Date(selectedDate) : addDays(selectedDate,-dowIdx(selectedDate));
+  start.setHours(0,0,0,0);
+  // find tallest window for consistent scale
+  let lo=Infinity,hi=-Infinity;
+  for(let i=0;i<n;i++){ const w=dayWindow(blocksFor(addDays(start,i))); lo=Math.min(lo,w[0]); hi=Math.max(hi,w[1]); }
+  const PX = n>3 ? 0.34 : 0.6;
+  for(let i=0;i<n;i++){
+    const d=addDays(start,i);
+    const col=document.createElement("div");
+    col.className="mini-col"+(isToday(d)?" is-today":"");
+    const head=document.createElement("div"); head.className="mini-head";
+    head.innerHTML=`${DOW_SHORT[dowIdx(d)]}<small>${isToday(d)?"Today":d.getDate()+" "+d.toLocaleDateString(undefined,{month:"short"})}</small>`;
+    head.onclick=()=>{ selectedDate=d; setView("day"); };
+    const tr=document.createElement("div"); tr.className="mini-track"; tr.style.height=((hi-lo)*PX)+"px";
+    col.appendChild(head); col.appendChild(tr); grid.appendChild(col);
+    // build with fixed window
+    buildMini(tr, blocksFor(d), d, PX, lo, hi);
+  }
+}
+function buildMini(track, blocks, d, PX, lo, hi){
+  track.innerHTML="";
+  const log=logFor(d);
+  blocks.forEach(b=>{
+    const c=CATS[b.cat]||CATS.project;
+    const top=(t2m(b.start)-lo)*PX;
+    let h=(t2m(b.end)-t2m(b.start))*PX; if(h<0)h+=1440*PX;
+    const el=document.createElement("div");
+    el.className="mini-blk"+(log[b.id]?" done":"");
+    el.style.top=top+"px"; el.style.height=Math.max(9,h-2)+"px"; el.style.background=c.color;
+    el.title=`${b.start}–${b.end} ${b.title}`;
+    el.textContent=`${c.emoji} ${b.title}`;
+    track.appendChild(el);
+  });
+  if(isToday(d)){ const nm=nowMin(); if(nm>=lo&&nm<=hi){ const y=(nm-lo)*PX; const nl=document.createElement("div"); nl.style.cssText=`position:absolute;left:0;right:0;top:${y}px;border-top:2px solid var(--clay-deep);z-index:5;`; track.appendChild(nl);} }
+}
+
+/* done logging */
+function toggleBlockDone(id){
+  const k=todayKey(selectedDate);
+  if(!state.rhythm.log[k]) state.rhythm.log[k]={};
+  if(state.rhythm.log[k][id]){ delete state.rhythm.log[k][id]; }
+  else { const now=new Date(); state.rhythm.log[k][id]= isToday(selectedDate)? m2t(now.getHours()*60+now.getMinutes()) : "✓"; }
+  persist(); renderRhythm();
+}
+
+/* navigation + views */
+function stepDay(n){ selectedDate = n===0 ? new Date() : addDays(selectedDate,n); renderRhythm(); }
+function setView(v){ currentView=v; document.querySelectorAll("#viewSeg button").forEach(b=>b.classList.toggle("on",b.dataset.view===v)); renderRhythm(); }
+
+/* block editor modal */
+function openBlockEditor(id){
+  editingBlockId=id; editingDayKey=dowKeyOf(selectedDate);
+  const blocks=state.rhythm.days[editingDayKey];
+  let b;
+  if(id){ b=blocks.find(x=>x.id===id); document.getElementById("blockModalTitle").textContent="Edit block"; document.getElementById("bm_delete").style.display="inline-flex"; }
+  else { b={title:"",start:"15:00",end:"16:00",cat:"project",icon:"",who:"both"}; document.getElementById("blockModalTitle").textContent="Add block"; document.getElementById("bm_delete").style.display="none"; }
+  document.getElementById("bm_title").value=b.title;
+  document.getElementById("bm_start").value=b.start;
+  document.getElementById("bm_end").value=b.end;
+  document.getElementById("bm_icon").value=b.icon||"";
+  document.getElementById("bm_who").value=b.who||"both";
+  editingCat=b.cat;
+  const cp=document.getElementById("bm_cats"); cp.innerHTML="";
+  CAT_KEYS.forEach(k=>{
+    const c=CATS[k]; const el=document.createElement("div");
+    el.className="cc"+(k===editingCat?" on":""); el.style.background=c.color;
+    el.innerHTML=`${c.emoji}<br>${c.label}`;
+    el.onclick=()=>{ editingCat=k; cp.querySelectorAll(".cc").forEach(x=>x.classList.remove("on")); el.classList.add("on"); };
+    cp.appendChild(el);
+  });
+  document.getElementById("blockModal").classList.add("show");
+}
+function closeBlockEditor(){ document.getElementById("blockModal").classList.remove("show"); }
+function saveBlock(){
+  const title=document.getElementById("bm_title").value.trim()||"Untitled";
+  const start=document.getElementById("bm_start").value||"15:00";
+  const end=document.getElementById("bm_end").value||"16:00";
+  if(t2m(end)<=t2m(start)){ toast("End time must be after start ⏰"); return; }
+  const icon=document.getElementById("bm_icon").value.trim();
+  const who=document.getElementById("bm_who").value;
+  const blocks=state.rhythm.days[editingDayKey];
+  if(editingBlockId){ const b=blocks.find(x=>x.id===editingBlockId); Object.assign(b,{title,start,end,cat:editingCat,icon,who}); }
+  else { blocks.push({id:rid(),title,start,end,cat:editingCat,icon,who}); }
+  state.rhythm.userEdited=true;
+  persist(); closeBlockEditor(); renderRhythm(); toast("Saved 💾");
+}
+function deleteBlock(){
+  if(!editingBlockId) return;
+  state.rhythm.days[editingDayKey]=state.rhythm.days[editingDayKey].filter(x=>x.id!==editingBlockId);
+  state.rhythm.userEdited=true;
+  persist(); closeBlockEditor(); renderRhythm(); toast("Block removed");
+}
+function copyToWeekdays(){
+  if(!confirm("Copy this day's rhythm to Monday–Friday? (Replaces those weekday templates.)")) return;
+  const src=state.rhythm.days[dowKeyOf(selectedDate)];
+  ["mon","tue","wed","thu","fri"].forEach(k=>{ state.rhythm.days[k]=src.map(b=>({...b,id:rid()})); });
+  state.rhythm.userEdited=true;
+  persist(); renderRhythm(); toast("Copied to weekdays 📋");
+}
+function resetRhythm(){
+  if(!confirm("Reset ALL weekday rhythms to the default school-style template? (Your done-logs are kept.)")) return;
+  const log=state.rhythm.log; state.rhythm=defaultRhythm(); state.rhythm.log=log;
+  persist(); renderRhythm(); toast("Rhythm reset ↩");
+}
+
+/* view segment + 3D mouse tilt */
+document.getElementById("viewSeg").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) setView(b.dataset.view); });
+(function tilt(){
+  const stage=document.querySelector(".rhythm-stage"); if(!stage) return;
+  const track=document.getElementById("rhythmTrack");
+  stage.addEventListener("mousemove",e=>{
+    const r=stage.getBoundingClientRect();
+    const rx=((e.clientY-r.top)/r.height-0.5)*-5;
+    const ry=((e.clientX-r.left)/r.width-0.5)*5;
+    track.style.transform=`rotateX(${rx}deg) rotateY(${ry}deg)`;
+  });
+  stage.addEventListener("mouseleave",()=>{ track.style.transform="rotateX(0) rotateY(0)"; });
+})();
+
+/* ============================ WORK BLOCKS ============================ */
+function bindWork(){
+  const map = {w_parent:"parent",w_time:"time",w_min:"min",w_kids:"kids",w_emergency:"emergency"};
+  for(const [id,key] of Object.entries(map)){
+    const el = document.getElementById(id);
+    if(state.work[key]!==undefined && state.work[key]!=="") el.value = state.work[key];
+    el.addEventListener("input",()=>{
+      state.work[key] = key==="min" ? parseInt(el.value||90) : el.value;
+      persist();
+      if(key==="min" && !workInterval) document.getElementById("workTimer").textContent = pad(parseInt(el.value||90))+":00";
+    });
+  }
+  document.getElementById("workTimer").textContent = pad(state.work.min||90)+":00";
+}
+function pad(n){ return String(n).padStart(2,"0"); }
+function startWorkTimer(){
+  stopWorkTimer();
+  let secs = (parseInt(state.work.min)||90)*60;
+  const el = document.getElementById("workTimer");
+  const tick = ()=>{
+    const m = Math.floor(secs/60), s = secs%60;
+    el.textContent = pad(m)+":"+pad(s);
+    if(secs<=0){ stopWorkTimer(); el.textContent="✅ Done"; toast("Protected work block complete 🎉"); return; }
+    secs--;
+  };
+  tick(); workInterval = setInterval(tick,1000); toast("Protected work time started 🛡️");
+}
+function stopWorkTimer(){ if(workInterval){ clearInterval(workInterval); workInterval=null; } }
+
+/* ============================ RESET ============================ */
+function startReset(){
+  resetStep = 0; updateResetSteps();
+  const timerEl = document.getElementById("resetTimer");
+  timerEl.style.display = "block";
+  let secs = 60;
+  clearInterval(resetInterval);
+  const stepEvery = 12; // advance step every ~12s
+  resetInterval = setInterval(()=>{
+    const m=Math.floor(secs/60), s=secs%60;
+    timerEl.textContent = pad(m)+":"+pad(s);
+    if(secs % stepEvery === 0 && resetStep < 4){ resetStep++; updateResetSteps(); }
+    if(secs<=0){ endReset(true); return; }
+    secs--;
+  },1000);
+  toast("Reset started — stop and breathe 🌬️");
+}
+function updateResetSteps(){
+  document.querySelectorAll("#resetSteps li").forEach((li,i)=>li.classList.toggle("active", i===resetStep));
+}
+function endReset(auto){
+  clearInterval(resetInterval); resetInterval=null;
+  document.getElementById("resetTimer").style.display="none";
+  document.querySelectorAll("#resetSteps li").forEach(li=>li.classList.remove("active"));
+  if(auto) toast("Reset complete — welcome back 💛");
+}
+
+/* ============================ POINTS ============================ */
+function renderPoints(){
+  KIDS.forEach(kid=>{
+    document.getElementById("score_"+kid).textContent = state.points[kid];
+    const box = document.querySelector(`.pointbtns[data-kid="${kid}"]`);
+    if(box.childElementCount===0){
+      POINT_TYPES.forEach(([label,emoji])=>{
+        const b = document.createElement("button");
+        b.className="btn btn-ghost"; b.innerHTML=`${emoji} +1`;
+        b.title = label;
+        b.addEventListener("click",()=>addPoint(kid,label));
+        box.appendChild(b);
+      });
+      const minus = document.createElement("button");
+      minus.className="btn btn-ghost"; minus.textContent="–1";
+      minus.addEventListener("click",()=>{ state.points[kid]=Math.max(0,state.points[kid]-1); persist(); renderPoints(); });
+      box.appendChild(minus);
+    }
+    document.getElementById("pause_"+kid).style.display = state.paused[kid] ? "flex" : "none";
+  });
+}
+function addPoint(kid,label){
+  if(state.paused[kid]){ toast("Privileges paused — finish reset & repair first 🌥️"); }
+  state.points[kid]++; persist(); renderPoints(); toast(`${kid==='jack'?'Jack':'Anya'}: +1 for ${label} ⭐`);
+}
+function togglePause(kid){
+  state.paused[kid] = !state.paused[kid]; persist(); renderPoints();
+  toast(state.paused[kid] ? `${kid==='jack'?'Jack':'Anya'}'s privileges paused` : `${kid==='jack'?'Jack':'Anya'}'s privileges resumed 💛`);
+}
+
+/* ============================ BRAIN DUMP ============================ */
+function bindBrainDump(){
+  const el = document.getElementById("braindump");
+  el.value = state.braindump || "";
+  el.addEventListener("input",()=>{ state.braindump=el.value; persist(); });
+}
+
+/* Voice capture using the browser's built-in Web Speech API (no backend needed
+   for live dictation). Works in Chrome/Edge. Transcript lands in the textarea,
+   then "Auto-sort with AI" can send it to your backend (AI_ENDPOINT). */
+let recog=null, recording=false;
+function toggleRecord(){
+  const Sr = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const status=document.getElementById("recStatus");
+  const btn=document.getElementById("recBtn");
+  if(!Sr){ status.textContent="Voice typing isn't supported in this browser — try Chrome or Edge, or paste your transcript."; return; }
+  if(recording){ recog && recog.stop(); return; }
+  recog=new Sr(); recog.continuous=true; recog.interimResults=true; recog.lang=navigator.language||"en-GB";
+  const ta=document.getElementById("braindump");
+  let base=ta.value ? ta.value.trim()+"\n" : "";
+  recog.onresult=(e)=>{
+    let finalTxt="", interim="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal) finalTxt+=r[0].transcript+" "; else interim+=r[0].transcript;
+    }
+    if(finalTxt){ base+=finalTxt; }
+    ta.value=base+interim;
+    state.braindump=ta.value; persist();
+  };
+  recog.onerror=(e)=>{ status.textContent="Mic error: "+e.error+". Check microphone permission."; };
+  recog.onend=()=>{ recording=false; btn.classList.remove("rec-on"); btn.innerHTML='<span class="rec-dot"></span> Record voice note'; status.textContent="Saved. Hit Record again to add more, or Auto-sort with AI."; };
+  recog.start(); recording=true;
+  btn.classList.add("rec-on"); btn.innerHTML='<span class="rec-dot"></span> Stop &amp; save';
+  status.textContent="🎙️ Listening… speak naturally. Tap Stop when done.";
+}
+function organizeManually(){
+  const out = document.getElementById("organizeOutput");
+  const q = document.getElementById("organizeQuestions");
+  q.innerHTML = "";
+  ORGANIZE_QUESTIONS.forEach((question,i)=>{
+    const wrap = document.createElement("label");
+    wrap.className="field";
+    wrap.innerHTML = `<span>${i+1}. ${question}</span><textarea data-q="${i}" placeholder="Type your answer...">${state.organizeAnswers[i]||""}</textarea>`;
+    wrap.querySelector("textarea").addEventListener("input",e=>{
+      state.organizeAnswers[i]=e.target.value; persist();
+    });
+    q.appendChild(wrap);
+  });
+  out.style.display="block";
+  out.scrollIntoView({behavior:"smooth"});
+}
+
+/* Organize with AI — calls YOUR backend (AI_ENDPOINT). Never the Anthropic API directly.
+   The backend should accept { text } and return { result } (organized plan text). */
+/* ---- AI settings panel binding ---- */
+function bindAIConfig(){
+  const c = loadAIConfig();
+  document.getElementById("ai_mode").value = c.mode;
+  document.getElementById("ai_key").value = c.key || "";
+  document.getElementById("ai_model").value = c.model || "claude-opus-4-8";
+  document.getElementById("ai_endpoint").value = c.endpoint || "";
+  onAIModeChange();
+  bindSyncConfig();
+  const pf=document.getElementById("pin_field"); if(pf) pf.value = state.pin||"1234";
+}
+function bindSyncConfig(){
+  const c = loadSync();
+  const url=document.getElementById("sync_url"); if(!url) return;
+  url.value=c.url||""; document.getElementById("sync_anon").value=c.anon||"";
+  document.getElementById("sync_code").value=c.code||""; document.getElementById("sync_enabled").checked=!!c.enabled;
+  setSyncDot(syncReady()?"ok":"");
+}
+function saveSyncConfig(){
+  const c = {
+    url: document.getElementById("sync_url").value.trim(),
+    anon: document.getElementById("sync_anon").value.trim(),
+    code: document.getElementById("sync_code").value.trim(),
+    enabled: document.getElementById("sync_enabled").checked
+  };
+  saveSync(c); toast("Sync settings saved ☁️");
+  if(syncReady()){ startSyncLoop(); syncPull(true); } else { stopSyncLoop(); setSyncDot(""); }
+}
+function savePIN(){
+  const v=(document.getElementById("pin_field").value||"").replace(/\D/g,"").slice(0,4);
+  if(v.length!==4){ toast("PIN must be 4 digits"); return; }
+  state.pin=v; persist(); toast("PIN saved 🔑");
+}
+function onAIModeChange(){
+  const mode = document.getElementById("ai_mode").value;
+  document.getElementById("ai_keyBox").style.display = mode==="key" ? "block" : "none";
+  document.getElementById("ai_backendBox").style.display = mode==="backend" ? "block" : "none";
+}
+function saveAIConfig(){
+  saveAIConfigObj({
+    mode: document.getElementById("ai_mode").value,
+    key: document.getElementById("ai_key").value.trim(),
+    model: document.getElementById("ai_model").value,
+    endpoint: document.getElementById("ai_endpoint").value.trim(),
+  });
+  toast("AI settings saved 💾");
+}
+
+/* ---- Structured-output schema the model must return ---- */
+const AI_SCHEMA = {
+  type:"object", additionalProperties:false,
+  properties:{
+    summary:{ type:"string", description:"One short paragraph recapping what you understood." },
+    todayFocus:{
+      type:"object", additionalProperties:false,
+      description:"Fields for Today's Family Focus. Use empty string to leave a field unchanged.",
+      properties:{
+        intention:{type:"string"}, workblock:{type:"string"}, kids:{type:"string"},
+        meals:{type:"string"}, contrib:{type:"string"}, wellbeing:{type:"string"}
+      },
+      required:["intention","workblock","kids","meals","contrib","wellbeing"]
+    },
+    calendarBlocks:{
+      type:"array", description:"Time blocks to add to the daily rhythm.",
+      items:{
+        type:"object", additionalProperties:false,
+        properties:{
+          day:{type:"string", enum:["today","tomorrow","mon","tue","wed","thu","fri","sat","sun"]},
+          start:{type:"string", description:"24h HH:MM"},
+          end:{type:"string", description:"24h HH:MM"},
+          title:{type:"string"},
+          cat:{type:"string", enum:["wake","meal","move","project","learn","help","work","family","sleep","screen"]}
+        },
+        required:["day","start","end","title","cat"]
+      }
+    },
+    contributions:{
+      type:"array", description:"House jobs to assign.",
+      items:{
+        type:"object", additionalProperties:false,
+        properties:{ task:{type:"string"}, assignedTo:{type:"string", enum:["jack","anya","both"]} },
+        required:["task","assignedTo"]
+      }
+    },
+    reminders:{ type:"array", description:"Standalone things to remember.", items:{type:"string"} }
+  },
+  required:["summary","todayFocus","calendarBlocks","contributions","reminders"]
+};
+
+const AI_SYSTEM = `You are the planning assistant inside "Family OS", a calm dashboard for a family of two parents (Mommy and Daddy) and two children, Jack and Anya.
+
+Family philosophy (honour it): everyone contributes; phone/game/screen time is a privilege EARNED after respect, house help, creativity, movement and responsibility — never guaranteed. Protect parent work blocks. Keep the tone warm and team-oriented, never punishing.
+
+Your job: read the parent's messy brain-dump (typed or voice transcript) and turn it into concrete, structured changes to the family's day. Return ONLY data matching the provided JSON schema.
+
+Daily rhythm categories (use the 'cat' field): wake (wake & self-care), meal, move (movement/outside), project (creative/build), learn (quiet/learning), help (house contribution), work (parent protected work), family (family/wind-down), sleep (bath/books/bed), screen (earned screen time — place it AFTER earning blocks).
+
+Rules:
+- Only include changes the brain-dump actually implies. Leave todayFocus fields as "" when not mentioned. Use empty arrays when nothing applies.
+- Times are 24h "HH:MM". Keep blocks realistic and non-overlapping where you can.
+- Map "today"/"tomorrow" using the date given in the user message.
+- Prefer a few high-value changes over many trivial ones. Be concrete (real times, real tasks).
+- Assign house jobs to jack, anya, or both as appropriate for young children.`;
+
+function aiUserMessage(text){
+  const d = new Date();
+  const dowName = d.toLocaleDateString(undefined,{weekday:"long"});
+  const dk = dowKeyOf(d);
+  const tomorrow = addDays(d,1);
+  // brief snapshot of the current day's rhythm so the model doesn't duplicate blocks
+  const todays = (state.rhythm.days[dk]||[]).map(b=>`${b.start}-${b.end} ${b.title} [${b.cat}]`).join("; ");
+  return `Today is ${dowName} ${todayKey(d)} (rhythm day key "${dk}"). Tomorrow is ${tomorrow.toLocaleDateString(undefined,{weekday:"long"})} ("${dowKeyOf(tomorrow)}").
+
+Today's existing rhythm blocks: ${todays||"(none)"}.
+
+Current Today's Focus — intention: "${state.today.intention}", parent work: "${state.today.workblock}", kids: "${state.today.kids}", meals: "${state.today.meals}", contribution: "${state.today.contrib}", wellbeing: "${state.today.wellbeing}".
+
+Parent brain-dump to organise:
+"""
+${text}
+"""`;
+}
+
+/* ---- The call. Direct browser → Anthropic (key mode) or via your backend. ---- */
+async function callAI(text){
+  const c = loadAIConfig();
+  if(c.mode==="backend"){
+    if(!c.endpoint) throw new Error("No backend endpoint set in AI settings.");
+    const res = await fetch(c.endpoint, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ system:AI_SYSTEM, text, context: aiUserMessage(text), schema:AI_SCHEMA, model:c.model })
+    });
+    if(!res.ok) throw new Error("Backend returned "+res.status);
+    const data = await res.json();
+    // Backend may return the parsed object directly, or {result:"<json>"}.
+    return typeof data.result==="string" ? JSON.parse(data.result) : (data.result||data);
+  }
+  // key mode — direct to Anthropic
+  if(!c.key) throw new Error("Add your Anthropic API key in AI settings (or switch to backend mode).");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key": c.key,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body: JSON.stringify({
+      model: c.model || "claude-opus-4-8",
+      max_tokens: 8000,
+      thinking: { type:"adaptive" },
+      system: [{ type:"text", text: AI_SYSTEM, cache_control:{type:"ephemeral"} }],
+      messages: [{ role:"user", content: aiUserMessage(text) }],
+      output_config: { format: { type:"json_schema", schema: AI_SCHEMA } }
+    })
+  });
+  if(!res.ok){
+    let msg = "Anthropic API "+res.status;
+    try { const e = await res.json(); if(e.error && e.error.message) msg += " — "+e.error.message; } catch(_){}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  const block = (data.content||[]).find(b=>b.type==="text");
+  if(!block) throw new Error("No text block in response.");
+  return JSON.parse(block.text);
+}
+
+let aiProposal = null;
+async function organizeWithAI(){
+  const text = document.getElementById("braindump").value.trim();
+  if(!text){ toast("Type or paste something first 🧠"); return; }
+  const btns = document.querySelectorAll("#panel-braindump .btn");
+  toast("Organising with AI… ✨ (this can take a few seconds)");
+  try {
+    aiProposal = await callAI(text);
+    renderAIReview(aiProposal);
+  } catch(e){
+    console.error(e);
+    toast("AI failed: "+e.message);
+    organizeManually(); // graceful fallback to the guided questions
+  }
+}
+
+function renderAIReview(p){
+  const box = document.getElementById("aiChanges");
+  document.getElementById("aiSummary").textContent = p.summary || "";
+  box.innerHTML = "";
+  let idx = 0;
+  const add = (kind, text, apply)=>{
+    const id = "aic_"+(idx++);
+    const row = document.createElement("label");
+    row.className = "ai-change";
+    row.innerHTML = `<input type="checkbox" id="${id}" checked><div class="ac-body"><div class="ac-kind">${kind}</div><div class="ac-text">${text}</div></div>`;
+    row._apply = apply;
+    box.appendChild(row);
+  };
+  // todayFocus
+  const tfLabels = {intention:"Intention", workblock:"Parent work", kids:"Kids activity", meals:"Meals", contrib:"Contribution", wellbeing:"Wellbeing"};
+  Object.keys(tfLabels).forEach(k=>{
+    const v = (p.todayFocus&&p.todayFocus[k]||"").trim();
+    if(v) add("Today · "+tfLabels[k], esc(v), ()=>{ state.today[k]=v; });
+  });
+  // calendar blocks
+  (p.calendarBlocks||[]).forEach(b=>{
+    const c = CATS[b.cat] ? CATS[b.cat] : CATS.project;
+    add("Calendar · "+b.day.toUpperCase(), `${c.emoji} <b>${esc(b.title)}</b> <small>${esc(b.start)}–${esc(b.end)} · ${c.label}</small>`,
+      ()=>{ const dk = resolveDayKey(b.day); state.rhythm.days[dk].push({id:rid(), start:b.start, end:b.end, title:b.title, cat: CATS[b.cat]?b.cat:"project"}); });
+  });
+  // contributions
+  (p.contributions||[]).forEach(ct=>{
+    add("House job", `${esc(ct.task)} <small>→ ${esc(ct.assignedTo)}</small>`,
+      ()=>{ const i = CONTRIBUTIONS.indexOf(ct.task); if(i>=0){ state.contributions[i]={assigned:ct.assignedTo,done:false}; } else { state.today.contrib = (state.today.contrib?state.today.contrib+"; ":"")+ct.task+" ("+ct.assignedTo+")"; } });
+  });
+  if(idx===0){ box.innerHTML = `<p class="hint">The AI didn't find concrete changes to propose. Try adding more detail.</p>`; }
+  // reminders — informational only (shown, not applied as state changes)
+  const rem = (p.reminders||[]).filter(Boolean);
+  if(rem.length){
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:var(--radius-sm);background:var(--bg);";
+    wrap.innerHTML = `<div class="ac-kind" style="color:var(--ink-soft)">📌 Reminders (for you to note)</div><ul style="margin:6px 0 0;padding-left:18px;font-size:.86rem;color:var(--ink-soft)">${rem.map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`;
+    box.appendChild(wrap);
+  }
+  document.getElementById("aiReview").style.display="block";
+  document.getElementById("aiReview").scrollIntoView({behavior:"smooth"});
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+function resolveDayKey(day){
+  if(day==="today") return dowKeyOf(new Date());
+  if(day==="tomorrow") return dowKeyOf(addDays(new Date(),1));
+  return DOW_KEY.includes(day) ? day : dowKeyOf(new Date());
+}
+function applyAIChanges(){
+  let n = 0;
+  document.querySelectorAll("#aiChanges .ai-change").forEach(row=>{
+    const cb = row.querySelector("input[type=checkbox]");
+    if(cb && cb.checked && typeof row._apply==="function"){ row._apply(); n++; }
+  });
+  persist(); renderAll();
+  document.getElementById("aiReview").style.display="none";
+  toast(`Applied ${n} change${n===1?"":"s"} 💛`);
+}
+
+/* ============================ DATA ============================ */
+function saveAll(announce){
+  // most things autosave; this is a reassurance button + flush
+  persist();
+  if(announce) toast("Saved 💾");
+}
+function resetToday(){
+  if(!confirm("Reset today's checklist, project statuses, today's house jobs and brain dump?\n(Your weekly calendar, points, and work settings are kept.)")) return;
+  const fresh = defaultState();
+  state.today = fresh.today;
+  state.privilege = fresh.privilege;
+  state.projects = {};
+  state.contributions = {};
+  state.braindump = "";
+  state.organizeAnswers = {};
+  persist();
+  renderAll();
+  document.getElementById("organizeOutput").style.display="none";
+  toast("Fresh start for today 🌅");
+}
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download = "family-os-"+todayKey()+".json"; a.click();
+  URL.revokeObjectURL(url);
+  toast("Exported JSON ⬇️");
+}
+function importJSON(ev){
+  const file = ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try {
+      const imported = JSON.parse(reader.result);
+      state = Object.assign(defaultState(), imported);
+      persist(); renderAll(); toast("Imported ⬆️");
+    } catch(e){ toast("Could not read that file ⚠️"); }
+  };
+  reader.readAsText(file);
+  ev.target.value="";
+}
+
+/* ============================ KID MISSION MODE ============================ */
+/* Mission catalogue — 3 paths. Each mission earns stars; some HELP tasks earn € too.
+   solo/team tag on CREATE. Anya (5) sees a shorter, simpler subset. */
+const MISSIONS = {
+  create: [
+    {id:"lego", t:"Lego build creation", e:"🧱", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"drawing", t:"Drawing or coloring", e:"✏️", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"playdoh", t:"Play-Doh modeling", e:"🟡", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"book", t:"Make a book or comic", e:"📖", tag:"solo", stars:2, times:true, kid:"jack"},
+    {id:"train", t:"Train set / station build", e:"🚂", tag:"solo", stars:1, times:true, kid:"jack"},
+    {id:"cardboard", t:"Cardboard creation", e:"📦", tag:"team", stars:2, times:true, kid:"jack"},
+    {id:"garden_map", t:"Make a map of the garden", e:"🗺️", tag:"solo", stars:2, times:true, kid:"jack"},
+  ],
+  move: [
+    {id:"trampoline", t:"Trampoline jump session", e:"🤸", tag:"", stars:2, kid:"both"},
+    {id:"football", t:"Soccer practice in garden", e:"⚽", tag:"", stars:2, kid:"both"},
+    {id:"bike", t:"Bike & scooter loops", e:"🚲", tag:"", stars:2, kid:"both"},
+    {id:"forest", t:"Forest explorer walk", e:"🌲", tag:"", stars:2, kid:"both"},
+    {id:"yoga", t:"Yoga breathing with parents", e:"🧘", tag:"", stars:2, kid:"both"},
+    {id:"obstacle", t:"Obstacle running challenge", e:"🏃", tag:"", stars:2, kid:"jack"},
+  ],
+  help: [
+    {id:"feed_cats", t:"Feed the cats", e:"🐈", tag:"", stars:1, money:1, kid:"both"},
+    {id:"plates_back", t:"Bring plates back to kitchen", e:"🍽️", tag:"", stars:1, kid:"both"},
+    {id:"set_table", t:"Set the table", e:"🍴", tag:"", stars:1, kid:"both"},
+    {id:"water_plants", t:"Water plants carefully", e:"🪴", tag:"", stars:1, kid:"both"},
+    {id:"make_bed", t:"Make my bed", e:"🛏️", tag:"", stars:1, kid:"both"},
+    // ---- effort-based paid jobs (pick how much you did) ----
+    {id:"wash_car", t:"Wash the car", e:"🚗", tag:"", stars:2, kid:"both",
+      tiers:[{label:"Good help", money:2, stars:2}, {label:"Did lots, really nicely", money:5, stars:3}]},
+    {id:"cut_grass", t:"Cut the grass", e:"🌱", tag:"", stars:3, kid:"jack",
+      tiers:[{label:"Halfway", money:5, stars:2}, {label:"Full job", money:10, stars:4}]},
+    {id:"dishwasher", t:"Rinse plates & load dishwasher", e:"🧽", tag:"", stars:2, kid:"jack"},
+    {id:"laundry", t:"Fold laundry for 20 minutes", e:"🧺", tag:"", stars:3, kid:"jack"},
+    {id:"shopping", t:"Help with shopping bags", e:"🛍️", tag:"", stars:1, kid:"jack"},
+  ]
+};
+const PATHS = {
+  create: {label:"Create", emoji:"🎨", hero:"hero-create", ci:"ci-create", blurb:"Make or build something cool!", reward:"Independence"},
+  move:   {label:"Move",   emoji:"🚴", hero:"hero-move", ci:"ci-move", blurb:"Play, jump or run to feel strong and happy!", reward:"Health"},
+  help:   {label:"Help",   emoji:"🫶", hero:"hero-help", ci:"ci-help", blurb:"Help our home feel clean and calm — earn shiny stars!", reward:"Independence"},
+};
+const KID_INFO = { jack:{name:"Jack", av:"🔵", young:false}, anya:{name:"Anya", av:"🟣", young:true} };
+
+/* Adventure Rewards — experiences, not objects. Unlocked with stars. */
+const REWARDS = [
+  {id:"playground", t:"Playground Mission", e:"🛝", cost:10},
+  {id:"forest", t:"Dad Forest Adventure", e:"🌲", cost:15},
+  {id:"swim", t:"Swimming Challenge", e:"🏊", cost:15},
+  {id:"bike_adv", t:"Big Bike Adventure", e:"🚵", cost:20},
+  {id:"train", t:"Train Day Out", e:"🚂", cost:25},
+  {id:"treasure", t:"Treasure Hunt", e:"🗺️", cost:25},
+  {id:"picnic", t:"Family Picnic", e:"🧺", cost:20},
+  {id:"build_day", t:"Build Something Together Day", e:"🛠️", cost:20},
+  {id:"cat_hero", t:"Cat Care Hero Day", e:"🐈", cost:12},
+  {id:"nature", t:"Nature Detective Quest", e:"🔎", cost:18},
+];
+
+/* Hotspot Attack zones — everyone picks one messy area to make BETTER (not perfect). */
+const HOTSPOTS = ["My bedroom", "The toy area", "The living room", "Shoe & coat corner", "The car", "Bookshelf", "Kitchen table", "The garden"];
+const FOOTBALL_DAYS = [2, 4]; // Tue, Thu (JS getDay: 0=Sun..6=Sat)
+
+/* Routine checklists — the PREREQUISITE for requesting a timer.
+   School day → evening routine. No-school day → morning routine.
+   Jack has an extra "Forlax" step (per parent). */
+const ROUTINES = {
+  evening: {
+    title:"Evening routine", emoji:"🪥",
+    base:[
+      {id:"teeth", t:"Brush my teeth", e:"🪥"},
+      {id:"bed", t:"Make / sort my bed", e:"🛏️"},
+      {id:"tidy", t:"Tidy my things away", e:"🧸"},
+    ],
+    jackExtra:[{id:"forlax", t:"Take my Forlax", e:"💊"}],
+  },
+  morning: {
+    title:"Morning routine", emoji:"🌅",
+    base:[
+      {id:"teeth_am", t:"Brush my teeth", e:"🪥"},
+      {id:"dress", t:"Get dressed", e:"👕"},
+      {id:"bed_am", t:"Make my bed", e:"🛏️"},
+      {id:"tidy_am", t:"Tidy my room", e:"🧸"},
+    ],
+    jackExtra:[{id:"forlax_am", t:"Take my Forlax", e:"💊"}],
+  }
+};
+function routineForToday(){
+  return state.dayType==="school" ? ROUTINES.evening : ROUTINES.morning;
+}
+function routineSteps(){
+  const r = routineForToday();
+  return KID_INFO[kidCur].young ? r.base : r.base.concat(r.jackExtra||[]);
+}
+function routineDone(){
+  const r = kidState().routine||{};
+  return routineSteps().every(st=>r[st.id]);
+}
+
+let kidCur = "anya";       // current child profile
+let kidView = "profiles";  // profiles | day | paths | path:create | rewards | hotspot | football
+let kidPath = null;
+
+function kidState(){ return state.kids[kidCur]; }
+function isYoung(){ return KID_INFO[kidCur].young; }
+function missionsForPath(p){
+  // Anya (young) sees the "both"-tagged missions only (Jack also gets his jack-only ones).
+  // No hard count cap — that previously hid paid jobs like the car wash from her.
+  return MISSIONS[p].filter(m=> m.kid==="both" || m.kid===kidCur);
+}
+/* a "path complete" = at least one mission done in that path */
+function pathDone(p){ const d=kidState().done; return MISSIONS[p].some(m=>d[m.id]); }
+function pathsComplete(){ return ["create","move","help"].every(pathDone); }
+
+function renderKid(){
+  // header
+  const info = KID_INFO[kidCur];
+  const onWelcome = (kidView==="profiles");
+  document.getElementById("kidAv").textContent = info.av;
+  document.getElementById("kidName").textContent = info.name;
+  document.getElementById("kidStars").textContent = kidState().stars;
+  document.getElementById("kidMoney").textContent = kidState().money;
+  document.getElementById("kidBack").style.visibility = onWelcome ? "hidden" : "visible";
+  document.getElementById("kidBrand").style.display = onWelcome ? "block" : "none";
+  document.getElementById("kidPill").style.display = onWelcome ? "none" : "flex";
+  document.getElementById("emergencyBtn").style.display = onWelcome ? "none" : "block";
+  const s = document.getElementById("kidScreen");
+  if(kidView==="profiles") return renderKidProfiles(s);
+  if(kidView==="day") return renderKidDay(s);
+  if(kidView==="paths") return renderKidPaths(s);
+  if(kidView==="rewards") return renderRewards(s);
+  if(kidView==="hotspot") return renderHotspot(s);
+  if(kidView==="football") return renderFootball(s);
+  if(kidView==="routine") return renderRoutine(s);
+  if(kidView==="calendar") return renderKidCalendar(s);
+  if(kidView.startsWith("path:")) return renderKidMissions(s, kidView.split(":")[1]);
+}
+function isFootballDay(){ return FOOTBALL_DAYS.includes(new Date().getDay()); }
+/* Hotspot Attack runs every second day — anchored to day-of-year parity. */
+function isHotspotDay(){ const d=new Date(); const start=new Date(d.getFullYear(),0,0); const day=Math.floor((d-start)/86400000); return day%2===0; }
+
+function renderKidProfiles(s){
+  document.getElementById("kidBack").style.visibility="hidden";
+  const pics = { jack:"🚀", anya:"🎨" };
+  s.innerHTML = `
+    <div class="welcome">
+      <h1>Ready for fun?</h1>
+      <p class="sub">Who is playing today?</p>
+      <div class="profile-tiles">
+        ${KIDS.map(k=>`<button class="ptile ptile-${k}" onclick="kidPick('${k}')">
+          <div class="pic">${pics[k]}</div>
+          <div class="pname">${KID_INFO[k].name}</div>
+          <div class="ppts">⭐ ${state.kids[k].stars} · 💶 €${state.kids[k].money}</div>
+        </button>`).join("")}
+      </div>
+      <div class="note-card">
+        <div class="heart">❤️</div>
+        <h3>A Note From Mommy &amp; Daddy</h3>
+        <p>"We love you so much! Our job is to help you grow up happy, healthy, and strong. Let's check off our fun daily steps!"</p>
+      </div>
+    </div>`;
+}
+function kidPick(k){ kidCur=k; kidView = state.dayType ? "paths" : "day"; renderKid(); }
+
+function renderKidDay(s){
+  s.innerHTML = `
+    <div class="kid-hero hero-home"><div class="badge">📅</div><div><h2>What kind of day is today?</h2><p>This sets up the right missions.</p></div></div>
+    <div class="kid-choices">
+      <button class="choice" onclick="setDayType('school')"><div class="ci ci-school">🎒</div><div class="cmeta"><b>School Day</b><span>You already did the big one — school!</span></div><div class="cgo">→</div></button>
+      <button class="choice" onclick="setDayType('weekend')"><div class="ci ci-weekend">🌈</div><div class="cmeta"><b>Weekend / Holiday</b><span>Choose one mission from each path.</span></div><div class="cgo">→</div></button>
+      <button class="choice" onclick="setDayType('special')"><div class="ci ci-special">🎉</div><div class="cmeta"><b>Special Day</b><span>Birthday, trip, or a one-off adventure.</span></div><div class="cgo">→</div></button>
+    </div>`;
+}
+function setDayType(t){ state.dayType=t; persist(); kidView="paths"; renderKid(); }
+
+function renderKidPaths(s){
+  const info = KID_INFO[kidCur];
+  const dayLabel = {school:"School Day",weekend:"Weekend",special:"Special Day"}[state.dayType]||"Today";
+  const intro = state.dayType==="school"
+    ? `Nice work at school today, ${info.name}! Pick a calm mission or two.`
+    : `Choose ONE mission from each path, ${info.name}. Then a timer can be <b>requested</b>.`;
+  const doneCount = ["create","move","help"].filter(pathDone).length;
+  const pct = Math.round(doneCount/3*100);
+  s.innerHTML = `
+    <div class="kid-hero hero-home"><div class="badge">${info.av}</div><div><h2>Today's Missions</h2><p>${intro}</p></div></div>
+    <div class="progress-wrap">
+      <div class="progress-head"><span class="ptitle">🎯 Today's Goals</span><span class="ppct">${pct}% Done</span></div>
+      <div class="progress-sub">Finish one in each path to open the timer request.</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-count">Paths done: ${doneCount} / 3</div>
+    </div>
+    <div class="kid-progress">
+      ${["create","move","help"].map(p=>`<div class="pcell ${pathDone(p)?'done':''}">
+        <div class="pemoji">${PATHS[p].emoji}</div><div class="plabel">${PATHS[p].label}</div>
+        <div class="pcheck">${pathDone(p)?'✓':'○'}</div></div>`).join("")}
+    </div>
+    <div class="kid-choices">
+      ${["create","move","help"].map(p=>`<button class="choice" onclick="kidOpenPath('${p}')">
+        <div class="ci ${PATHS[p].ci}">${PATHS[p].emoji}</div>
+        <div class="cmeta"><b>${PATHS[p].label}</b><span>${PATHS[p].blurb}</span></div>
+        <div class="cgo">${pathDone(p)?'✓':'→'}</div></button>`).join("")}
+    </div>
+    ${renderTimerGate()}
+    <div style="margin-top:18px;">
+      ${isFootballDay() ? `<button class="extra-tile et-football" onclick="kidGo('football')">
+        <div class="ei">⚽</div><div class="emeta"><b>Football Day!</b><span>Tap to see today's football routine</span></div><div class="cgo">→</div></button>`:""}
+      ${isHotspotDay() ? `<button class="extra-tile et-hotspot" onclick="kidGo('hotspot')">
+        <div class="ei">🧹</div><div class="emeta"><b>Hotspot Attack ${state.hotspot.zones[kidCur]?'✓':''}</b><span>15-min mission: make one messy spot better!</span></div><div class="cgo">→</div></button>`:""}
+      <button class="extra-tile" style="background:#dfeefb;" onclick="kidGo('calendar')">
+        <div class="ei">🗓️</div><div class="emeta"><b>My Day Plan</b><span>See today's colorful time blocks</span></div><div class="cgo">→</div></button>
+      <button class="extra-tile" style="background:${routineDone()?'#e6f3e3':'#cfe7df'};" onclick="kidGo('routine')">
+        <div class="ei">${routineForToday().emoji}</div><div class="emeta"><b>${routineForToday().title} ${routineDone()?'✓':''}</b><span>Needed before a timer can be requested</span></div><div class="cgo">→</div></button>
+      <button class="extra-tile et-reward" onclick="kidGo('rewards')">
+        <div class="ei">🏆</div><div class="emeta"><b>Adventure Rewards</b><span>Unlock real adventures with your ⭐ stars</span></div><div class="cgo">→</div></button>
+    </div>
+    <div class="kid-msg">Privileges come after responsibility. 💛<br>Mommy & Daddy protect your mind, body, and future because we love you.</div>`;
+}
+function kidOpenPath(p){ kidView="path:"+p; renderKid(); }
+function kidGo(v){ kidView=v; renderKid(); window.scrollTo(0,0); }
+
+/* Timer prerequisites:
+   School day  → evening routine complete.
+   No-school   → morning routine + one Creative + one Movement done. */
+function timerPrereqs(){
+  const r = routineForToday();
+  if(state.dayType==="school"){
+    return [{ ok:routineDone(), label:`${r.emoji} ${r.title}`, go:()=>kidGo('routine') }];
+  }
+  return [
+    { ok:routineDone(), label:`${r.emoji} ${r.title}`, go:()=>kidGo('routine') },
+    { ok:pathDone('create'), label:"🎨 One Creative mission", go:()=>kidOpenPath('create') },
+    { ok:pathDone('move'), label:"🚴 One Movement mission", go:()=>kidOpenPath('move') },
+  ];
+}
+function renderTimerGate(){
+  const ks = kidState();
+  const reqs = timerPrereqs();
+  const allOk = reqs.every(r=>r.ok);
+  const checklist = `<div style="text-align:left;margin:10px 0;">${reqs.map((r,i)=>
+    `<div onclick="timerReqGo(${i})" style="display:flex;align-items:center;gap:9px;padding:7px 4px;cursor:pointer;">
+      <span style="font-size:1.1rem;">${r.ok?'✅':'⬜'}</span>
+      <span style="font-weight:700;${r.ok?'color:var(--sage-deep);':''}">${r.label}</span>
+      ${r.ok?'':'<span style="margin-left:auto;color:var(--ink-soft);font-size:.8rem;">tap →</span>'}
+    </div>`).join("")}</div>`;
+  if(allOk){
+    return `<div class="timer-card timer-open"><div class="tbig">🎉 Ready!</div>${checklist}
+      <div class="tsub">A timer may now be <b>requested</b> — it is not automatic. A parent will decide.</div>
+      <button class="btn-request" onclick="requestTimer()" ${ks.timerRequested?'disabled':''}>${ks.timerRequested?'⏳ Asked a parent':'🙋 Request a timer'}</button></div>`;
+  }
+  return `<div class="timer-card timer-locked"><div class="tbig">🔒 Finish these to unlock the timer</div>${checklist}
+    <button class="btn-request" disabled>🙋 Request a timer</button></div>`;
+}
+let _timerReqs=[];
+function timerReqGo(i){ const reqs=timerPrereqs(); if(reqs[i]&&!reqs[i].ok) reqs[i].go(); }
+function requestTimer(){ kidState().timerRequested=true; persist(); renderKid(); toast("Sent to a parent to approve 🙋"); }
+
+function renderKidMissions(s, p){
+  const path = PATHS[p];
+  const list = missionsForPath(p);
+  const ks = kidState();
+  s.innerHTML = `
+    <div class="kid-hero ${path.hero}"><div class="badge">${path.emoji}</div><div><h2>${path.label}</h2><p>${path.blurb}</p></div></div>
+    <div id="missionList"></div>`;
+  const box = document.getElementById("missionList");
+  list.forEach(m=>{
+    const rec = ks.done[m.id];                 // undefined | {date,stars,money,tierLabel?}
+    const done = !!rec;
+    const row = document.createElement("div");
+    row.className="mission";
+    const tag = m.tag==="solo" ? `<span class="tag tag-solo">Solo</span>` : m.tag==="team" ? `<span class="tag tag-team">Team</span>` : "";
+    // money badge: tiered jobs show a range (e.g. €2–€5); flat jobs show €1
+    let moneyBadge = "";
+    if(m.tiers){ const lo=m.tiers[0].money, hi=m.tiers[m.tiers.length-1].money; moneyBadge=`<span class="tag tag-money">💶 €${lo}–€${hi}</span>`; }
+    else if(m.money){ moneyBadge=`<span class="tag tag-money">💶 €${m.money}</span>`; }
+
+    let actionHTML;
+    if(m.tiers){
+      // effort-based: one button per tier (or a single "Done!" when completed)
+      actionHTML = done
+        ? `<button class="mstar done" data-act="undo">✓ €${rec.money}</button>`
+        : `<div style="display:flex;flex-direction:column;gap:6px;">${m.tiers.map((ti,i)=>
+            `<button class="mstar" data-tier="${i}" style="font-size:.8rem;padding:9px 12px;min-width:120px;">${ti.label} · €${ti.money}</button>`).join("")}</div>`;
+    } else {
+      actionHTML = `<button class="mstar ${done?'done':''}" data-act="${done?'undo':'do'}">${done?'⭐ Done!':'⭐ +'+m.stars}</button>`;
+    }
+    row.innerHTML = `
+      <div class="mi">${m.e}</div>
+      <div class="mbody">
+        <div class="mtitle">${m.t}</div>
+        <div class="mmeta">${tag}${moneyBadge}<span>⭐ +${m.stars}</span></div>
+        ${m.times && !isYoung() ? `<div class="mtimes">${[30,60,90].map(t=>`<span class="mtime" data-t="${t}">⏱ ${t}m</span>`).join("")}</div>`:""}
+      </div>
+      ${actionHTML}`;
+    row.querySelectorAll(".mtime").forEach(c=>c.addEventListener("click",()=>{
+      row.querySelectorAll(".mtime").forEach(x=>x.classList.remove("on")); c.classList.add("on");
+    }));
+    row.querySelectorAll(".mstar").forEach(btn=>btn.addEventListener("click",()=>{
+      const tier = btn.dataset.tier!==undefined ? parseInt(btn.dataset.tier) : null;
+      toggleMission(m, p, tier);
+    }));
+    box.appendChild(row);
+  });
+}
+function toggleMission(m, p, tierIdx){
+  const ks = kidState();
+  const rec = ks.done[m.id];
+  if(rec){
+    // undo — reverse exactly what was awarded
+    ks.stars = Math.max(0, ks.stars - (rec.stars||0));
+    ks.money = Math.max(0, ks.money - (rec.money||0));
+    ks.missionsDone = Math.max(0, ks.missionsDone - 1);
+    if(rec.point) state.points[kidCur] = Math.max(0,(state.points[kidCur]||0)-1);
+    delete ks.done[m.id];
+  } else {
+    let stars = m.stars||0, money = m.money||0, label = null;
+    if(m.tiers){ const ti = m.tiers[tierIdx||0]; stars = ti.stars; money = ti.money; label = ti.label; }
+    const point = (p==="help"||p==="create"||p==="move");
+    ks.done[m.id] = { date: todayKey(), stars, money, tierLabel: label, point };
+    ks.stars += stars; ks.money += money; ks.missionsDone++;
+    if(point) state.points[kidCur] = (state.points[kidCur]||0)+1;
+    toast(`⭐ +${stars} for ${KID_INFO[kidCur].name}!`+(money?` (+€${money})`:""));
+  }
+  persist(); renderKid();
+}
+
+function kidBack(){
+  if(kidView.startsWith("path:")){ kidView="paths"; }
+  else if(kidView==="rewards"||kidView==="hotspot"||kidView==="football"||kidView==="routine"||kidView==="calendar"){ kidView="paths"; }
+  else if(kidView==="paths"){ kidView="day"; }
+  else if(kidView==="day"){ kidView="profiles"; }
+  if(hotspotInterval && kidView!=="hotspot"){ clearInterval(hotspotInterval); hotspotInterval=null; }
+  renderKid();
+}
+
+/* ---- Adventure Rewards ---- */
+function renderRewards(s){
+  const ks = kidState();
+  s.innerHTML = `
+    <div class="kid-hero hero-home"><div class="badge">🏆</div><div><h2>Adventure Rewards</h2><p>You unlock real adventures — not toys. You have <b>⭐ ${ks.stars} stars</b>.</p></div></div>
+    <div id="rewardList"></div>`;
+  const box = document.getElementById("rewardList");
+  REWARDS.forEach(r=>{
+    const got = ks.rewards.includes(r.id);
+    const canAfford = ks.stars >= r.cost;
+    const row = document.createElement("div");
+    row.className = "reward-card "+(got?"unlocked":(canAfford?"":"locked"));
+    row.innerHTML = `
+      <div class="ri">${r.e}</div>
+      <div class="rbody"><b>${r.t}</b><span>${got?'Unlocked — ask a parent to plan it! 🎉':'Costs ⭐ '+r.cost+' stars'}</span></div>
+      ${got ? `<span class="rgot">✓ Got it</span>`
+            : `<button class="runlock" ${canAfford?'':'disabled'}>Unlock ⭐${r.cost}</button>`}`;
+    const btn = row.querySelector(".runlock");
+    if(btn) btn.addEventListener("click",()=>unlockReward(r));
+    box.appendChild(row);
+  });
+}
+function unlockReward(r){
+  const ks = kidState();
+  if(ks.stars < r.cost){ toast("Not enough stars yet ⭐"); return; }
+  if(!confirm(`Unlock "${r.t}" for ${r.cost} stars?`)) return;
+  ks.stars -= r.cost; ks.rewards.push(r.id); persist(); renderKid();
+  toast(`🎉 Unlocked: ${r.t}! Ask a parent to plan it.`);
+}
+
+/* ---- Hotspot Attack (15-min "make it better" family mission) ---- */
+let hotspotInterval = null, hotspotSecs = 0;
+function renderHotspot(s){
+  const picked = state.hotspot.zones[kidCur];
+  s.innerHTML = `
+    <div class="kid-hero hero-home"><div class="badge">🧹</div><div><h2>Hotspot Attack!</h2><p>15-minute family mission. Pick one messy spot and make it <b>better than you found it</b> — not perfect, just better!</p></div></div>
+    <div class="timer-card timer-open">
+      <div class="hot-timer" id="hotTimer">${picked && state.hotspot.done?'✓ Done!':'15:00'}</div>
+      <div class="tsub" id="hotSub">${picked?('Your zone: '+picked):'Choose your zone below, then start the timer.'}</div>
+      <button class="btn-request" id="hotStart" onclick="startHotspot()" ${picked?'':'disabled'}>▶ Start 15-min timer</button>
+    </div>
+    <h3 style="margin:18px 2px 10px;">Pick your zone</h3>
+    <div class="zone-grid" id="zoneGrid"></div>
+    <div class="timer-card timer-open" style="margin-top:16px;">
+      <div class="tbig">🏅 Family Team Points: ${state.familyTeamPoints}</div>
+      <div class="tsub">Each finished Hotspot earns the whole family a point.</div>
+      <button class="btn-request" onclick="finishHotspot()">✓ I made my spot better!</button>
+    </div>`;
+  const g = document.getElementById("zoneGrid");
+  HOTSPOTS.forEach(z=>{
+    const b=document.createElement("button");
+    b.className="zone-btn"+(picked===z?" picked":"");
+    b.textContent=z;
+    b.onclick=()=>{ state.hotspot.date=todayKey(); state.hotspot.zones[kidCur]=z; persist(); renderKid(); };
+    g.appendChild(b);
+  });
+}
+function startHotspot(){
+  if(!state.hotspot.zones[kidCur]){ toast("Pick a zone first 🧹"); return; }
+  clearInterval(hotspotInterval);
+  hotspotSecs = 15*60;
+  const el=document.getElementById("hotTimer");
+  const tick=()=>{
+    const m=Math.floor(hotspotSecs/60), sec=hotspotSecs%60;
+    if(el) el.textContent = String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+    if(hotspotSecs<=0){ clearInterval(hotspotInterval); hotspotInterval=null; if(el) el.textContent="⏰ Time!"; toast("Time! Did you make it better? ✓"); return; }
+    hotspotSecs--;
+  };
+  tick(); hotspotInterval=setInterval(tick,1000); toast("Go go go! 15 minutes 🧹");
+}
+function finishHotspot(){
+  if(!state.hotspot.zones[kidCur]){ toast("Pick a zone first 🧹"); return; }
+  if(state.hotspot.done && state.hotspot.doneBy && state.hotspot.doneBy[kidCur]){ toast("Already done today 🌟"); return; }
+  if(hotspotInterval){ clearInterval(hotspotInterval); hotspotInterval=null; }
+  if(!state.hotspot.doneBy) state.hotspot.doneBy={};
+  if(!state.hotspot.doneBy[kidCur]){
+    state.hotspot.doneBy[kidCur]=true; state.hotspot.done=true;
+    state.familyTeamPoints += 1;
+    kidState().stars += 1;
+    persist(); renderKid();
+    toast("🏅 +1 Family Team Point · ⭐ +1!");
+  }
+}
+
+/* ---- Football Days (Tue/Thu) ---- */
+function renderFootball(s){
+  s.innerHTML = `
+    <div class="kid-hero hero-move"><div class="badge">⚽</div><div><h2>Football Day!</h2><p>Tuesdays & Thursdays we keep a special evening routine so we get to football on time.</p></div></div>
+    <div class="fb-step"><div class="fbt">7:00</div><div class="fbi">🍽️</div><div class="fbx"><b>Dinner</b><span>Eat well — this is the main meal before football.</span></div></div>
+    <div class="fb-step"><div class="fbt">7:30</div><div class="fbi">⚽</div><div class="fbx"><b>Football</b><span>Go play hard and have fun!</span></div></div>
+    <div class="fb-step"><div class="fbt">9:00</div><div class="fbi">🏠</div><div class="fbx"><b>Return home</b><span>Light snack only if really needed — no second dinner.</span></div></div>
+    <div class="timer-card timer-open" style="margin-top:8px;"><div class="tbig">⭐ Movement counts!</div><div class="tsub">Football is a big Move mission — tap it done in the Move path to earn your stars.</div></div>`;
+}
+
+/* ---- Routine checklist (timer prerequisite) ---- */
+function renderRoutine(s){
+  const r = routineForToday();
+  const steps = routineSteps();
+  const ks = kidState();
+  const doneN = steps.filter(st=>ks.routine[st.id]).length;
+  const pct = Math.round(doneN/steps.length*100);
+  s.innerHTML = `
+    <div class="kid-hero hero-home"><div class="badge">${r.emoji}</div><div><h2>${r.title}</h2><p>${state.dayType==="school"?"Finish these in the evening to unlock a timer.":"Do these first thing to unlock a timer later."}</p></div></div>
+    <div class="progress-wrap">
+      <div class="progress-head"><span class="ptitle">${r.emoji} ${r.title}</span><span class="ppct">${pct}% Done</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-count">${doneN} / ${steps.length} steps</div>
+    </div>
+    <div id="routineList"></div>
+    ${doneN===steps.length?`<div class="timer-card timer-open" style="margin-top:8px;"><div class="tbig">🎉 Routine complete!</div><div class="tsub">Great job — that's one big step toward a timer.</div></div>`:""}`;
+  const box=document.getElementById("routineList");
+  steps.forEach(st=>{
+    const done=!!ks.routine[st.id];
+    const row=document.createElement("div");
+    row.className="mission";
+    row.innerHTML=`<div class="mi">${st.e}</div><div class="mbody"><div class="mtitle">${st.t}</div></div>
+      <button class="mstar ${done?'done':''}">${done?'✓ Done!':'Do it'}</button>`;
+    row.querySelector(".mstar").addEventListener("click",()=>{
+      if(ks.routine[st.id]) delete ks.routine[st.id]; else { ks.routine[st.id]=true; toast("✓ "+st.t); }
+      persist(); renderKid();
+    });
+    box.appendChild(row);
+  });
+}
+
+/* ---- Kid Calendar: colorful time blocks for today (read-only, friendly) ---- */
+function renderKidCalendar(s){
+  const d = new Date();
+  const dk = dowKeyOf(d);
+  // show only blocks for everyone ("both") or for THIS child
+  const blocks = (state.rhythm.days[dk]||[])
+    .filter(b=>!b.who || b.who==="both" || b.who===kidCur)
+    .slice().sort((a,b)=>t2m(a.start)-t2m(b.start));
+  const dayName = d.toLocaleDateString(undefined,{weekday:"long"});
+  const log = state.rhythm.log[todayKey(d)]||{};
+  s.innerHTML = `
+    <div class="kid-hero hero-home"><div class="badge">🗓️</div><div><h2>My Day Plan</h2><p>${dayName} — here's our day in colorful blocks. Tap ✓ when you finish one!</p></div></div>
+    <div id="kidCalList"></div>`;
+  const box=document.getElementById("kidCalList");
+  if(!blocks.length){ box.innerHTML=`<p class="kid-msg">No blocks set for today yet. A parent can add them in the parent area.</p>`; return; }
+  const nm = nowMin();
+  blocks.forEach(b=>{
+    const c = CATS[b.cat]||CATS.project;
+    const done = !!log[b.id];
+    const isNow = nm>=t2m(b.start) && nm<t2m(b.end);
+    const row=document.createElement("div");
+    row.className="mission";
+    row.style.borderLeft = `6px solid ${c.color}`;
+    if(isNow) row.style.boxShadow = "0 0 0 2px var(--clay-deep), var(--shadow-soft)";
+    row.innerHTML = `
+      <div class="mi" style="background:${c.color};">${blockIcon(b)}</div>
+      <div class="mbody">
+        <div class="mtitle">${esc(b.title)}</div>
+        <div class="mmeta"><span class="tag">${b.start}–${b.end}</span>${isNow?'<span class="tag" style="background:var(--clay);color:#5a3018;">▶ now</span>':''}</div>
+      </div>
+      <button class="mstar ${done?'done':''}">${done?'✓':'Done'}</button>`;
+    row.querySelector(".mstar").addEventListener("click",()=>{
+      const k=todayKey(d); if(!state.rhythm.log[k]) state.rhythm.log[k]={};
+      if(state.rhythm.log[k][b.id]) delete state.rhythm.log[k][b.id];
+      else { const now=new Date(); state.rhythm.log[k][b.id]=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); }
+      persist(); renderKid();
+    });
+    box.appendChild(row);
+  });
+}
+
+/* Safety / emergency modal */
+function openSafety(){ document.getElementById("safetyModal").classList.add("show"); }
+function closeSafety(){ document.getElementById("safetyModal").classList.remove("show"); }
+
+/* ---- PIN + mode switching ---- */
+let pinEntry = "";
+function openPIN(){
+  pinEntry=""; renderPinDots();
+  document.getElementById("pinTitle").textContent="🔒 Parent area";
+  document.getElementById("pinHint").textContent="Enter your 4-digit PIN";
+  buildPinPad();
+  document.getElementById("pinModal").classList.add("show");
+}
+function closePIN(){ document.getElementById("pinModal").classList.remove("show"); }
+function buildPinPad(){
+  const pad=document.getElementById("pinPad"); pad.innerHTML="";
+  ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
+    const b=document.createElement("button"); b.textContent=d;
+    if(d==="") { b.style.visibility="hidden"; }
+    else b.onclick=()=>pinPress(d);
+    pad.appendChild(b);
+  });
+}
+function renderPinDots(){
+  const dots=document.getElementById("pinDots"); dots.innerHTML="";
+  for(let i=0;i<4;i++){ const el=document.createElement("div"); el.className="pindot"+(i<pinEntry.length?" on":""); dots.appendChild(el); }
+}
+function pinPress(d){
+  if(d==="⌫"){ pinEntry=pinEntry.slice(0,-1); renderPinDots(); return; }
+  if(pinEntry.length>=4) return;
+  pinEntry+=d; renderPinDots();
+  if(pinEntry.length===4){
+    setTimeout(()=>{
+      if(pinEntry===String(state.pin)){ closePIN(); openParent(); }
+      else { document.getElementById("pinHint").textContent="Try again — wrong PIN"; pinEntry=""; renderPinDots(); }
+    },150);
+  }
+}
+function openParent(){
+  document.getElementById("kidApp").style.display="none";
+  document.getElementById("parentApp").style.display="block";
+  renderAll();
+}
+function lockParent(){
+  document.getElementById("parentApp").style.display="none";
+  document.getElementById("kidApp").style.display="block";
+  kidView="profiles"; renderKid();
+}
+
+/* ============================ INIT ============================ */
+function renderAll(){
+  bindToday();
+  renderPrivilege();
+  renderProjects();
+  renderContributions();
+  renderRhythm();
+  bindWork();
+  renderPoints();
+  bindBrainDump();
+  bindAIConfig();
+}
+function init(){
+  document.getElementById("todayPill").textContent =
+    new Date().toLocaleDateString(undefined,{weekday:"long", month:"long", day:"numeric"});
+  renderKid();   // app opens in kid mode by default
+  if(syncReady()) startSyncLoop();   // begin cloud sync if configured
+}
+init();
+
+/* PWA: register the service worker so the app loads offline and is installable.
+   Only runs in a secure context (https or localhost) — silently skipped on file://. */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{ /* offline support unavailable; app still works */ });
+  });
+}
+</script>
+</body>
+</html>
