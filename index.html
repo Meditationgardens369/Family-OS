@@ -543,6 +543,29 @@
   .note-card h3{ color:var(--sky-deep); margin:8px 0 10px; font-size:1.15rem; }
   .note-card p{ font-style:italic; color:var(--ink); margin:0; line-height:1.55; }
 
+  /* slim top + big playful path cards (redesigned missions screen) */
+  .paths-top { margin:2px 2px 14px; }
+  .paths-hello { font-size:1.15rem; font-weight:800; color:var(--ink); margin-bottom:8px; }
+  .mini-bar { height:10px; border-radius:999px; background:#fff; overflow:hidden; box-shadow:var(--shadow-soft); }
+  .mini-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--sage),var(--sage-deep)); transition:width .35s ease; }
+  .path-bigs { display:grid; gap:14px; margin-bottom:18px; }
+  .path-big { display:flex; align-items:center; gap:16px; border:none; border-radius:24px; padding:20px; cursor:pointer;
+    box-shadow:var(--shadow); text-align:left; width:100%; transition:transform .1s ease, box-shadow .15s ease; position:relative; overflow:hidden; }
+  .path-big:active { transform:scale(.98); }
+  .path-big:hover { box-shadow:0 12px 28px rgba(80,70,55,.16); }
+  .path-big .pb-emoji { width:76px;height:76px;border-radius:20px;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:2.6rem; background:rgba(255,255,255,.65); }
+  .path-big .pb-text { flex:1; min-width:0; }
+  .path-big .pb-text b { font-size:1.45rem; display:block; line-height:1.1; }
+  .path-big .pb-text span { font-size:.9rem; opacity:.85; }
+  .path-big .pb-check { font-size:1.8rem; font-weight:800; color:rgba(0,0,0,.25); flex:none; }
+  .path-big.pb-create { background:linear-gradient(135deg,#efe7f7,#e3d6f0); } .path-big.pb-create b{ color:#7d5ba6; }
+  .path-big.pb-move   { background:linear-gradient(135deg,#e6f3e3,#d3eccf); } .path-big.pb-move b{ color:var(--sage-deep); }
+  .path-big.pb-help   { background:linear-gradient(135deg,#fbe9dd,#f7d9c5); } .path-big.pb-help b{ color:var(--clay-deep); }
+  .path-big.done .pb-check { color:var(--sage-deep); }
+  .path-big.done::after { content:"✓ done"; position:absolute; top:10px; right:14px; font-size:.72rem; font-weight:800;
+    background:rgba(255,255,255,.7); color:var(--sage-deep); padding:2px 9px; border-radius:999px; }
+
   /* progress bar on paths view */
   .progress-wrap { background:#fff; border-radius:20px; padding:16px 18px; box-shadow:var(--shadow-soft); margin-bottom:16px; }
   .progress-head { display:flex; justify-content:space-between; align-items:baseline; }
@@ -823,6 +846,31 @@
         <button class="btn btn-sage" onclick="startWorkTimer()">▶ Start block</button>
         <button class="btn btn-ghost" onclick="stopWorkTimer()">⏹ Stop</button>
       </div>
+    </div>
+
+    <div class="card accent-rose" style="margin-top:14px;">
+      <h3>💼 Working Hours the kids can see</h3>
+      <p class="hint">Add blocks per day. These show in the kids' "Mom &amp; Dad's Work" tab with a live 🔴 "now" badge so they know when to play independently. Update anytime.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <label class="field" style="flex:1; min-width:110px; margin:0;"><span>Day</span>
+          <select id="wh_day">
+            <option value="mon">Monday</option><option value="tue">Tuesday</option><option value="wed">Wednesday</option>
+            <option value="thu">Thursday</option><option value="fri">Friday</option><option value="sat">Saturday</option><option value="sun">Sunday</option>
+          </select>
+        </label>
+        <label class="field" style="min-width:100px; margin:0;"><span>Who</span>
+          <select id="wh_who"><option>Mommy</option><option>Daddy</option><option>Both</option></select>
+        </label>
+        <label class="field" style="min-width:90px; margin:0;"><span>Start</span><input type="time" id="wh_start" value="09:00" /></label>
+        <label class="field" style="min-width:90px; margin:0;"><span>End</span><input type="time" id="wh_end" value="10:30" /></label>
+        <label class="field" style="flex:1; min-width:120px; margin:0;"><span>Note (optional)</span><input type="text" id="wh_note" placeholder="e.g. calls" /></label>
+        <button class="btn btn-sage sm" onclick="addWorkHour()">＋ Add</button>
+      </div>
+      <div id="whEditor"></div>
+      <label class="field" style="margin-top:12px;"><span>Message to the kids (shown under their work tab)</span>
+        <textarea id="wh_message" rows="2"></textarea>
+      </label>
+      <button class="btn btn-ghost sm" onclick="saveWorkMessage()">Save message</button>
     </div>
   </section>
 
@@ -1324,6 +1372,8 @@ function defaultState(){
     },
     familyTeamPoints: 0,    // earned via Hotspot Attack
     hotspot: { date:"", zones:{}, doneBy:{}, done:false }, // zones picked + who finished today
+    // Parent working hours kids can see (editable in parent area). days: mon..sun -> [{who,start,end,note}]
+    workHours: { note:"Our adventures and holidays grow when Mommy & Daddy get focused work done. Thank you for playing so well!", days:{} },
     pin: "1234"             // parent PIN (changeable in parent → Data)
   };
 }
@@ -1350,6 +1400,8 @@ function loadState(){
     if(typeof s.familyTeamPoints!=="number") s.familyTeamPoints=0;
     if(!s.hotspot || typeof s.hotspot!=="object") s.hotspot={date:"",zones:{},doneBy:{},done:false};
     if(!s.hotspot.zones) s.hotspot.zones={}; if(!s.hotspot.doneBy) s.hotspot.doneBy={};
+    if(!s.workHours || typeof s.workHours!=="object") s.workHours={note:defaultState().workHours.note, days:{}};
+    if(!s.workHours.days) s.workHours.days={};
     if(!s.pin) s.pin="1234";
     // daily rollover: if stored "today" is an old date, reset daily-only bits
     if(s.today.date !== todayKey()){
@@ -1779,7 +1831,43 @@ function bindWork(){
     });
   }
   document.getElementById("workTimer").textContent = pad(state.work.min||90)+":00";
+  bindWorkHours();
 }
+const WH_DAYNAME = {mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",sun:"Sun"};
+function bindWorkHours(){
+  const msg=document.getElementById("wh_message"); if(msg) msg.value = state.workHours.note||"";
+  renderWorkHoursEditor();
+}
+function renderWorkHoursEditor(){
+  const box=document.getElementById("whEditor"); if(!box) return;
+  const days = state.workHours.days||{};
+  const order = DOW_KEY.filter(k=>(days[k]||[]).length);
+  if(!order.length){ box.innerHTML=`<p class="hint" style="margin:0;">No working hours added yet.</p>`; return; }
+  box.innerHTML = order.map(k=>{
+    const rows = days[k].slice().sort((a,b)=>t2m(a.start)-t2m(b.start)).map((b,i)=>
+      `<div class="contrib" style="margin-bottom:6px;">
+        <span class="name">${WH_DAYNAME[k]} · ${b.start}–${b.end} · ${esc(b.who||"Parent")}${b.note?' ('+esc(b.note)+')':''}</span>
+        <button class="btn btn-ghost sm" onclick="removeWorkHour('${k}',${i})">🗑</button>
+      </div>`).join("");
+    return rows;
+  }).join("");
+}
+function addWorkHour(){
+  const k=document.getElementById("wh_day").value;
+  const who=document.getElementById("wh_who").value;
+  const start=document.getElementById("wh_start").value||"09:00";
+  const end=document.getElementById("wh_end").value||"10:30";
+  const note=document.getElementById("wh_note").value.trim();
+  if(t2m(end)<=t2m(start)){ toast("End must be after start ⏰"); return; }
+  if(!state.workHours.days[k]) state.workHours.days[k]=[];
+  state.workHours.days[k].push({who,start,end,note});
+  persist(); renderWorkHoursEditor(); document.getElementById("wh_note").value=""; toast("Work block added 💼");
+}
+function removeWorkHour(k,i){
+  if(state.workHours.days[k]){ state.workHours.days[k].splice(i,1); if(!state.workHours.days[k].length) delete state.workHours.days[k]; }
+  persist(); renderWorkHoursEditor(); toast("Removed");
+}
+function saveWorkMessage(){ state.workHours.note=document.getElementById("wh_message").value; persist(); toast("Message saved 💛"); }
 function pad(n){ return String(n).padStart(2,"0"); }
 function startWorkTimer(){
   stopWorkTimer();
@@ -2196,9 +2284,18 @@ function importJSON(ev){
    solo/team tag on CREATE. Anya (5) sees a shorter, simpler subset. */
 const MISSIONS = {
   create: [
+    {id:"toys", t:"Imaginative play with toys", e:"🧸", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"drawing", t:"Draw or colour a picture", e:"🖍️", tag:"solo", stars:1, times:true, kid:"both"},
     {id:"lego", t:"Lego build creation", e:"🧱", tag:"solo", stars:1, times:true, kid:"both"},
-    {id:"drawing", t:"Drawing or coloring", e:"✏️", tag:"solo", stars:1, times:true, kid:"both"},
     {id:"playdoh", t:"Play-Doh modeling", e:"🟡", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"cut_stick", t:"Cutting & sticking project", e:"✂️", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"dolls", t:"Dress & decorate my dolls", e:"🪆", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"paint", t:"Painting", e:"🎨", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"pastels", t:"Pastels & chalk art", e:"🖌️", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"paper_toys", t:"Make toys out of paper", e:"📄", tag:"solo", stars:2, times:true, kid:"both"},
+    {id:"sticker_craft", t:"Sticker & glitter craft", e:"✨", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"dressup", t:"Dress-up & pretend play", e:"👗", tag:"solo", stars:1, times:true, kid:"both"},
+    {id:"beads", t:"Make a bead bracelet", e:"📿", tag:"solo", stars:1, times:true, kid:"both"},
     {id:"book", t:"Make a book or comic", e:"📖", tag:"solo", stars:2, times:true, kid:"jack"},
     {id:"train", t:"Train set / station build", e:"🚂", tag:"solo", stars:1, times:true, kid:"jack"},
     {id:"cardboard", t:"Cardboard creation", e:"📦", tag:"team", stars:2, times:true, kid:"jack"},
@@ -2251,7 +2348,7 @@ const REWARDS = [
 
 /* Hotspot Attack zones — everyone picks one messy area to make BETTER (not perfect). */
 const HOTSPOTS = ["My bedroom", "The toy area", "The living room", "Shoe & coat corner", "The car", "Bookshelf", "Kitchen table", "The garden"];
-const FOOTBALL_DAYS = [2, 4]; // Tue, Thu (JS getDay: 0=Sun..6=Sat)
+const FOOTBALL_DAYS = [0, 2, 4, 6]; // Sun, Tue, Thu, Sat (JS getDay: 0=Sun..6=Sat)
 
 /* Routine checklists — the PREREQUISITE for requesting a timer.
    School day → evening routine. No-school day → morning routine.
@@ -2325,6 +2422,7 @@ function renderKid(){
   if(kidView==="football") return renderFootball(s);
   if(kidView==="routine") return renderRoutine(s);
   if(kidView==="calendar") return renderKidCalendar(s);
+  if(kidView==="workhours") return renderKidWorkHours(s);
   if(kidView.startsWith("path:")) return renderKidMissions(s, kidView.split(":")[1]);
 }
 function isFootballDay(){ return FOOTBALL_DAYS.includes(new Date().getDay()); }
@@ -2367,61 +2465,47 @@ function setDayType(t){ state.dayType=t; persist(); kidView="paths"; renderKid()
 
 function renderKidPaths(s){
   const info = KID_INFO[kidCur];
-  const dayLabel = {school:"School Day",weekend:"Weekend",special:"Special Day"}[state.dayType]||"Today";
-  const intro = state.dayType==="school"
-    ? `Nice work at school today, ${info.name}! Pick a calm mission or two.`
-    : `Choose ONE mission from each path, ${info.name}. Then a timer can be <b>requested</b>.`;
   const doneCount = ["create","move","help"].filter(pathDone).length;
   const pct = Math.round(doneCount/3*100);
+  const pathCard = (p)=>{
+    const done = pathDone(p);
+    return `<button class="path-big pb-${p} ${done?'done':''}" onclick="kidOpenPath('${p}')">
+      <div class="pb-emoji">${PATHS[p].emoji}</div>
+      <div class="pb-text"><b>${PATHS[p].label}</b><span>${PATHS[p].blurb}</span></div>
+      <div class="pb-check">${done?'✓':'›'}</div>
+    </button>`;
+  };
   s.innerHTML = `
-    <div class="kid-hero hero-home"><div class="badge">${info.av}</div><div><h2>Today's Missions</h2><p>${intro}</p></div></div>
-    <div class="progress-wrap">
-      <div class="progress-head"><span class="ptitle">🎯 Today's Goals</span><span class="ppct">${pct}% Done</span></div>
-      <div class="progress-sub">Finish one in each path to open the timer request.</div>
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div class="progress-count">Paths done: ${doneCount} / 3</div>
+    <div class="paths-top">
+      <div class="paths-hello">Hi ${info.av} ${info.name}! Pick your missions:</div>
+      <div class="mini-bar"><div class="mini-fill" style="width:${pct}%"></div></div>
     </div>
-    <div class="kid-progress">
-      ${["create","move","help"].map(p=>`<div class="pcell ${pathDone(p)?'done':''}">
-        <div class="pemoji">${PATHS[p].emoji}</div><div class="plabel">${PATHS[p].label}</div>
-        <div class="pcheck">${pathDone(p)?'✓':'○'}</div></div>`).join("")}
-    </div>
-    <div class="kid-choices">
-      ${["create","move","help"].map(p=>`<button class="choice" onclick="kidOpenPath('${p}')">
-        <div class="ci ${PATHS[p].ci}">${PATHS[p].emoji}</div>
-        <div class="cmeta"><b>${PATHS[p].label}</b><span>${PATHS[p].blurb}</span></div>
-        <div class="cgo">${pathDone(p)?'✓':'→'}</div></button>`).join("")}
-    </div>
+    <div class="path-bigs">${pathCard('create')}${pathCard('move')}${pathCard('help')}</div>
     ${renderTimerGate()}
-    <div style="margin-top:18px;">
+    <div style="margin-top:16px;">
       ${isFootballDay() ? `<button class="extra-tile et-football" onclick="kidGo('football')">
         <div class="ei">⚽</div><div class="emeta"><b>Football Day!</b><span>Tap to see today's football routine</span></div><div class="cgo">→</div></button>`:""}
       ${isHotspotDay() ? `<button class="extra-tile et-hotspot" onclick="kidGo('hotspot')">
         <div class="ei">🧹</div><div class="emeta"><b>Hotspot Attack ${state.hotspot.zones[kidCur]?'✓':''}</b><span>15-min mission: make one messy spot better!</span></div><div class="cgo">→</div></button>`:""}
       <button class="extra-tile" style="background:#dfeefb;" onclick="kidGo('calendar')">
         <div class="ei">🗓️</div><div class="emeta"><b>My Day Plan</b><span>See today's colorful time blocks</span></div><div class="cgo">→</div></button>
-      <button class="extra-tile" style="background:${routineDone()?'#e6f3e3':'#cfe7df'};" onclick="kidGo('routine')">
-        <div class="ei">${routineForToday().emoji}</div><div class="emeta"><b>${routineForToday().title} ${routineDone()?'✓':''}</b><span>Needed before a timer can be requested</span></div><div class="cgo">→</div></button>
+      <button class="extra-tile" style="background:#f3e3e6;" onclick="kidGo('workhours')">
+        <div class="ei">💼</div><div class="emeta"><b>Mom &amp; Dad's Work ${parentWorkingNow()?'· 🔴 now':''}</b><span>When grown-ups need focus time</span></div><div class="cgo">→</div></button>
       <button class="extra-tile et-reward" onclick="kidGo('rewards')">
         <div class="ei">🏆</div><div class="emeta"><b>Adventure Rewards</b><span>Unlock real adventures with your ⭐ stars</span></div><div class="cgo">→</div></button>
     </div>
     <div class="kid-msg">Privileges come after responsibility. 💛<br>Mommy & Daddy protect your mind, body, and future because we love you.</div>`;
 }
-function kidOpenPath(p){ kidView="path:"+p; renderKid(); }
+function kidOpenPath(p){ kidView="path:"+p; renderKid(); window.scrollTo(0,0); }
 function kidGo(v){ kidView=v; renderKid(); window.scrollTo(0,0); }
 
-/* Timer prerequisites:
-   School day  → evening routine complete.
-   No-school   → morning routine + one Creative + one Movement done. */
+/* Timer prerequisite: finish one mission in EACH path.
+   (Routine handled by the family without a tap-through screen.) */
 function timerPrereqs(){
-  const r = routineForToday();
-  if(state.dayType==="school"){
-    return [{ ok:routineDone(), label:`${r.emoji} ${r.title}`, go:()=>kidGo('routine') }];
-  }
   return [
-    { ok:routineDone(), label:`${r.emoji} ${r.title}`, go:()=>kidGo('routine') },
-    { ok:pathDone('create'), label:"🎨 One Creative mission", go:()=>kidOpenPath('create') },
-    { ok:pathDone('move'), label:"🚴 One Movement mission", go:()=>kidOpenPath('move') },
+    { ok:pathDone('create'), label:"🎨 One Create mission", go:()=>kidOpenPath('create') },
+    { ok:pathDone('move'), label:"🚴 One Move mission", go:()=>kidOpenPath('move') },
+    { ok:pathDone('help'), label:"🫶 One Help mission", go:()=>kidOpenPath('help') },
   ];
 }
 function renderTimerGate(){
@@ -2517,7 +2601,7 @@ function toggleMission(m, p, tierIdx){
 
 function kidBack(){
   if(kidView.startsWith("path:")){ kidView="paths"; }
-  else if(kidView==="rewards"||kidView==="hotspot"||kidView==="football"||kidView==="routine"||kidView==="calendar"){ kidView="paths"; }
+  else if(kidView==="rewards"||kidView==="hotspot"||kidView==="football"||kidView==="routine"||kidView==="calendar"||kidView==="workhours"){ kidView="paths"; }
   else if(kidView==="paths"){ kidView="day"; }
   else if(kidView==="day"){ kidView="profiles"; }
   if(hotspotInterval && kidView!=="hotspot"){ clearInterval(hotspotInterval); hotspotInterval=null; }
@@ -2611,7 +2695,7 @@ function finishHotspot(){
 /* ---- Football Days (Tue/Thu) ---- */
 function renderFootball(s){
   s.innerHTML = `
-    <div class="kid-hero hero-move"><div class="badge">⚽</div><div><h2>Football Day!</h2><p>Tuesdays & Thursdays we keep a special evening routine so we get to football on time.</p></div></div>
+    <div class="kid-hero hero-move"><div class="badge">⚽</div><div><h2>Football Day!</h2><p>On football days we keep a special evening routine so we get there on time.</p></div></div>
     <div class="fb-step"><div class="fbt">7:00</div><div class="fbi">🍽️</div><div class="fbx"><b>Dinner</b><span>Eat well — this is the main meal before football.</span></div></div>
     <div class="fb-step"><div class="fbt">7:30</div><div class="fbi">⚽</div><div class="fbx"><b>Football</b><span>Go play hard and have fun!</span></div></div>
     <div class="fb-step"><div class="fbt">9:00</div><div class="fbi">🏠</div><div class="fbx"><b>Return home</b><span>Light snack only if really needed — no second dinner.</span></div></div>
@@ -2645,6 +2729,43 @@ function renderRoutine(s){
       if(ks.routine[st.id]) delete ks.routine[st.id]; else { ks.routine[st.id]=true; toast("✓ "+st.t); }
       persist(); renderKid();
     });
+    box.appendChild(row);
+  });
+}
+
+/* ---- Parent working hours (kid-facing, read-only) ---- */
+function workHoursToday(){
+  const dk = dowKeyOf(new Date());
+  return (state.workHours && state.workHours.days && state.workHours.days[dk]) || [];
+}
+function parentWorkingNow(){
+  const nm = nowMin();
+  return workHoursToday().some(b=> nm>=t2m(b.start) && nm<t2m(b.end));
+}
+function renderKidWorkHours(s){
+  const blocks = workHoursToday().slice().sort((a,b)=>t2m(a.start)-t2m(b.start));
+  const dayName = new Date().toLocaleDateString(undefined,{weekday:"long"});
+  const now = parentWorkingNow();
+  const note = (state.workHours && state.workHours.note) || "";
+  s.innerHTML = `
+    <div class="kid-hero hero-help"><div class="badge">💼</div><div><h2>Mom &amp; Dad's Work</h2><p>${dayName}. ${now?'<b>Someone is working right now</b> — play independently and only interrupt for a real emergency. 💛':'No focus block happening right now.'}</p></div></div>
+    ${now?`<div class="timer-card" style="background:#fbe4e4;margin-bottom:14px;"><div class="tbig">🔴 Focus time now</div><div class="tsub">Quiet play, please — see the ⚠️ button if it's a real emergency.</div></div>`:''}
+    <div id="whList"></div>
+    <div class="note-card" style="margin-top:14px;"><div class="heart">💛</div><p>${esc(note)}</p></div>`;
+  const box = document.getElementById("whList");
+  if(!blocks.length){ box.innerHTML = `<p class="kid-msg">No work blocks set for today — yay, lots of family time! A parent can add times in the parent area.</p>`; return; }
+  const nm = nowMin();
+  blocks.forEach(b=>{
+    const isNow = nm>=t2m(b.start) && nm<t2m(b.end);
+    const who = b.who||"Parent";
+    const av = /mom|mum|mommy/i.test(who)?"👩":/dad|daddy/i.test(who)?"👨":"💼";
+    const row=document.createElement("div");
+    row.className="mission";
+    if(isNow) row.style.boxShadow="0 0 0 2px #cf4848, var(--shadow-soft)";
+    row.innerHTML=`
+      <div class="mi" style="background:#f3e3e6;">${av}</div>
+      <div class="mbody"><div class="mtitle">${esc(who)} working${b.note?': '+esc(b.note):''}</div>
+        <div class="mmeta"><span class="tag">${b.start}–${b.end}</span>${isNow?'<span class="tag" style="background:#cf4848;color:#fff;">🔴 now</span>':''}</div></div>`;
     box.appendChild(row);
   });
 }
