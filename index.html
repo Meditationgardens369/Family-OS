@@ -408,6 +408,8 @@
   .hero-create{ background:#efe7f7; } .hero-create h2{ color:#7d5ba6; }
   .hero-move{ background:#e6f3e3; } .hero-move h2{ color:var(--sage-deep); }
   .hero-help{ background:#fbe9dd; } .hero-help h2{ color:var(--clay-deep); }
+  .hero-play{ background:#fdeecb; } .hero-play h2{ color:#b5862f; }
+  .hero-learn{ background:#e3eefb; } .hero-learn h2{ color:var(--sky-deep); }
   .hero-home{ background:linear-gradient(135deg,#e6f3e3,#eaf2f6); } .hero-home h2{ color:var(--sage-deep); }
 
   /* big choice cards (profiles, day-type, paths) */
@@ -499,10 +501,12 @@
   .zone-btn.picked{ background:#e6f3e3; border-color:var(--sage-deep); color:var(--sage-deep); }
 
   .kid-msg { text-align:center; font-size:.85rem; color:var(--ink-soft); padding:16px 10px 0; line-height:1.5; }
-  .emergency-btn { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:45; max-width:528px; width:calc(100% - 32px);
-    border:none; border-radius:16px; padding:14px; font-weight:800; font-size:1rem; color:#fff; background:#cf4848;
-    box-shadow:0 6px 16px rgba(180,60,60,.35); cursor:pointer; }
-  .emergency-btn:active{ transform:translateX(-50%) translateY(1px); }
+  /* small, calm emergency access — not a big red bar */
+  .emergency-btn { position:fixed; right:14px; bottom:14px; z-index:45;
+    border:none; border-radius:999px; padding:9px 14px; font-weight:700; font-size:.8rem; color:#a85a5a; background:#fff;
+    box-shadow:var(--shadow-soft); border:1px solid #eccaca; cursor:pointer; opacity:.85; }
+  .emergency-btn:hover{ opacity:1; }
+  .emergency-btn:active{ transform:translateY(1px); }
 
   /* dark safety / pin modal */
   .dark-modal { background:#2b2622; color:#f3ece4; }
@@ -564,6 +568,8 @@
   .path-big.pb-create { background:linear-gradient(135deg,#efe7f7,#e3d6f0); } .path-big.pb-create b{ color:#7d5ba6; }
   .path-big.pb-move   { background:linear-gradient(135deg,#e6f3e3,#d3eccf); } .path-big.pb-move b{ color:var(--sage-deep); }
   .path-big.pb-help   { background:linear-gradient(135deg,#fbe9dd,#f7d9c5); } .path-big.pb-help b{ color:var(--clay-deep); }
+  .path-big.pb-play   { background:linear-gradient(135deg,#fdeecb,#f9e0a8); } .path-big.pb-play b{ color:#b5862f; }
+  .path-big.pb-learn  { background:linear-gradient(135deg,#e3eefb,#cfe0f5); } .path-big.pb-learn b{ color:var(--sky-deep); }
   .path-big.done .pb-check { color:var(--sage-deep); }
   .path-big.done::after { content:"✓ done"; position:absolute; top:10px; right:14px; font-size:.72rem; font-weight:800;
     background:rgba(255,255,255,.7); color:var(--sage-deep); padding:2px 9px; border-radius:999px; }
@@ -592,7 +598,7 @@
     <button class="kid-lock" onclick="openPIN()" title="Parent area">🔒</button>
   </div>
   <div id="kidScreen" class="kid-screen"><!-- injected --></div>
-  <button class="emergency-btn" id="emergencyBtn" onclick="openSafety()" style="display:none;">⚠️ Is this an emergency?</button>
+  <button class="emergency-btn" id="emergencyBtn" onclick="openSafety()" style="display:none;">🆘 Emergency?</button>
 </div>
 
 <!-- Activity focus timer modal -->
@@ -1357,6 +1363,39 @@ function defaultRhythm(){
   DOW_KEY.forEach((k,i)=>{ r.days[k] = defaultDayBlocks(i>=5); });
   return r;
 }
+/* No-school day plan: wake ~8, breakfast & tidy, then a MORNING MISSION WINDOW
+   (~9–12) where kids do their routine + pick missions. Screen can be requested
+   around midday (≈4h after waking). Built-in template, used for the kid "My Day
+   Plan" when the chosen day-type is not "school". */
+function noSchoolDayBlocks(){
+  const mk=(start,end,title,cat,icon,who)=>({id:"ns_"+title.replace(/[^a-z]+/gi,"_").toLowerCase(),start,end,title,cat,icon:icon||"",who:who||"both"});
+  return [
+    mk("08:00","08:30","Wake up & get dressed","wake","🌅"),
+    mk("08:30","09:00","Breakfast (and help make it!)","meal","🍳"),
+    mk("09:00","09:20","Morning routine: teeth, bed, tidy","routine","🪥"),
+    mk("09:20","12:00","Mission time: Create · Move · Play · Help","project","🌟"),
+    mk("12:00","12:30","Screen time can be requested now","screen","📱"),
+    mk("12:30","13:15","Lunch","meal","🥪"),
+    mk("13:15","15:30","Outside / family adventure / play","family","🌳"),
+    mk("15:30","16:30","Calm creative or learning time","learn","📚"),
+    mk("16:30","17:30","Help in the house","help","🫶"),
+    mk("17:30","18:30","Dinner & help clear","meal","🍽️"),
+    mk("18:30","20:00","Family wind-down","family","💛"),
+    mk("20:00","20:45","Anya: bath & wind-down","routine","🛁","anya"),
+    mk("20:45","21:15","Anya: bedtime story & sleep","sleep","📖","anya"),
+    mk("20:30","21:30","Jack: evening routine & bed","routine","📖","jack"),
+  ];
+}
+/* The day-plan the KID sees, chosen by today's day-type (not just the weekday).
+   school → that weekday's stored rhythm (has the School block).
+   weekend/special → the no-school template.  sick → none (recovery list instead). */
+function dayPlanFor(d){
+  if(state.dayType==="sick") return [];
+  if(state.dayType && state.dayType!=="school") return noSchoolDayBlocks();
+  return blocksFor(d);   // school day (or no day-type chosen) → stored weekday rhythm
+}
+/* When can screen time be REQUESTED on a no-school day — about midday. */
+const NOSCHOOL_SCREEN_HOUR = 12;
 /* Icon for a block: its own icon if set, else the category's emoji. */
 function blockIcon(b){ return b.icon || (CATS[b.cat]||CATS.project).emoji; }
 function rid(){ return "b"+Math.random().toString(36).slice(2,9); }
@@ -1383,15 +1422,27 @@ function defaultState(){
     // ---- Kid Mission mode ----
     dayType: "",            // "" until chosen today: school | weekend | special
     kids: {
-      jack: { stars:0, money:0, missionsDone:0, done:{}, timerRequested:false, rewards:[], routine:{} },
-      anya: { stars:0, money:0, missionsDone:0, done:{}, timerRequested:false, rewards:[], routine:{} }
+      jack: { stars:0, money:0, missionsDone:0, done:{}, timerRequested:false, rewards:[], routine:{}, screenEndsAt:0 },
+      anya: { stars:0, money:0, missionsDone:0, done:{}, timerRequested:false, rewards:[], routine:{}, screenEndsAt:0 }
     },
     familyTeamPoints: 0,    // earned via Hotspot Attack
     hotspot: { date:"", zones:{}, doneBy:{}, done:false }, // zones picked + who finished today
     // Parent working hours kids can see (editable in parent area). days: mon..sun -> [{who,start,end,note}]
     workHours: { note:"Our adventures and holidays grow when Mommy & Daddy get focused work done. Thank you for playing so well!", days:{} },
+    // Sick / recovery: parent (or AI) sets today's specific get-better tasks per kid.
+    // recovery.tasks[kid] = [{id,t,e,done}]; recovery.note = encouraging message.
+    recovery: { tasks:{ jack:[], anya:[] }, note:"" },
     pin: "1234"             // parent PIN (changeable in parent → Data)
   };
+}
+/* Always-present recovery basics (shown on a sick day on top of any specific tasks). */
+function recoveryBasics(){
+  return [
+    {id:"hydrate", t:"Drink plenty of water", e:"💧"},
+    {id:"eat_well", t:"Eat healthy food — skip sugary, crispy junk", e:"🍎"},
+    {id:"rest", t:"Rest and take it gently", e:"🛌"},
+    {id:"gentle_try", t:"Do one small kind or gentle thing if you can", e:"💛"},
+  ];
 }
 
 function loadState(){
@@ -1411,13 +1462,16 @@ function loadState(){
     if(typeof s.rhythm.v!=="number") s.rhythm.v=RHYTHM_V;
     // normalize kid-mode shape (older saves lack it)
     if(!s.kids || !s.kids.jack) s.kids = defaultState().kids;
-    KIDS.forEach(k=>{ s.kids[k] = Object.assign({stars:0,money:0,missionsDone:0,done:{},timerRequested:false,rewards:[],routine:{}}, s.kids[k]||{}); if(!Array.isArray(s.kids[k].rewards)) s.kids[k].rewards=[]; if(!s.kids[k].routine) s.kids[k].routine={}; });
+    KIDS.forEach(k=>{ s.kids[k] = Object.assign({stars:0,money:0,missionsDone:0,done:{},timerRequested:false,rewards:[],routine:{},screenEndsAt:0}, s.kids[k]||{}); if(!Array.isArray(s.kids[k].rewards)) s.kids[k].rewards=[]; if(!s.kids[k].routine) s.kids[k].routine={}; });
     if(typeof s.dayType!=="string") s.dayType="";
     if(typeof s.familyTeamPoints!=="number") s.familyTeamPoints=0;
     if(!s.hotspot || typeof s.hotspot!=="object") s.hotspot={date:"",zones:{},doneBy:{},done:false};
     if(!s.hotspot.zones) s.hotspot.zones={}; if(!s.hotspot.doneBy) s.hotspot.doneBy={};
     if(!s.workHours || typeof s.workHours!=="object") s.workHours={note:defaultState().workHours.note, days:{}};
     if(!s.workHours.days) s.workHours.days={};
+    if(!s.recovery || typeof s.recovery!=="object") s.recovery={tasks:{jack:[],anya:[]}, note:""};
+    if(!s.recovery.tasks) s.recovery.tasks={jack:[],anya:[]};
+    KIDS.forEach(k=>{ if(!Array.isArray(s.recovery.tasks[k])) s.recovery.tasks[k]=[]; });
     if(!s.pin) s.pin="1234";
     // daily rollover: if stored "today" is an old date, reset daily-only bits
     if(s.today.date !== todayKey()){
@@ -1430,6 +1484,7 @@ function loadState(){
       s.dayType = "";                       // ask the day-type again each new day
       KIDS.forEach(k=>{ s.kids[k].done={}; s.kids[k].missionsDone=0; s.kids[k].timerRequested=false; s.kids[k].routine={}; }); // keep stars + money + rewards
       s.hotspot = { date:"", zones:{}, doneBy:{}, done:false };    // fresh hotspot each day
+      s.recovery = { tasks:{jack:[],anya:[]}, note:"" };           // clear yesterday's recovery plan
       // keep rhythm, points, work, braindump, paused, kid stars/money/rewards, familyTeamPoints, pin
     }
     return s;
@@ -2300,6 +2355,7 @@ function importJSON(ev){
    solo/team tag on CREATE. Anya (5) sees a shorter, simpler subset. */
 /* Difficulty → points. d:1 ⭐ easy(5) · 2 ⭐⭐ medium(10) · 3 ⭐⭐⭐ big(20) · 4 ⭐⭐⭐⭐ exceptional(30) */
 const PTS = {1:5, 2:10, 3:20, 4:30};
+const TIME_PTS = {15:5, 30:12, 45:20, 60:30};  // accelerating — a full hour is a real bonus
 function pointsFor(d){ return PTS[d]||5; }
 function diffStars(d){ return "⭐".repeat(d||1); }
 const DIFF_NAME = {1:"Easy", 2:"Medium", 3:"Big project", 4:"Exceptional"};
@@ -2311,11 +2367,15 @@ const MISSIONS = {
     {id:"lego", t:"Build something with LEGO", e:"🧱", d:2, times:true, kid:"both"},
     {id:"playdoh", t:"Play-Doh creation", e:"🟡", d:2, times:true, kid:"both"},
     {id:"rock_paint", t:"Paint a rock collection", e:"🪨", d:2, times:true, kid:"both"},
-    {id:"fort", t:"Build a fort", e:"🏗️", d:3, times:true, kid:"both"},
-    {id:"puppet", t:"Create a puppet show", e:"🎭", d:3, times:true, kid:"both"},
+    {id:"fort", t:"Build / design a fort", e:"🏰", d:3, times:true, kid:"both"},
     {id:"giant_drawing", t:"Make a giant drawing", e:"🌈", d:3, times:true, kid:"both"},
     {id:"wood", t:"Build something with wood / pallets", e:"🪵", d:4, times:true, kid:"both"},
+    {id:"cardboard_vehicle", t:"Build a cardboard vehicle", e:"🚗", d:3, times:true, kid:"both"},
+    {id:"treasure_map", t:"Create a treasure map", e:"🗺️", d:2, times:true, kid:"both"},
+    {id:"bridge", t:"Build a bridge", e:"🌉", d:3, times:true, kid:"both"},
     // ---- Jack (older) ----
+    {id:"treehouse", t:"Design a treehouse", e:"🌳", d:3, times:true, kid:"jack"},
+    {id:"transport", t:"Design a transport system", e:"🚆", d:3, times:true, kid:"jack"},
     {id:"story_book", t:"Create a story book", e:"📖", d:3, times:true, kid:"jack"},
     {id:"short_video", t:"Make a short video", e:"🎬", d:3, times:true, kid:"jack"},
     {id:"invent_game", t:"Invent a new game", e:"🧩", d:3, times:true, kid:"jack"},
@@ -2324,16 +2384,67 @@ const MISSIONS = {
     {id:"design_dolls", t:"Design outfits for dolls", e:"👗", d:1, times:true, kid:"anya"},
     {id:"colouring", t:"Colouring project", e:"🖍️", d:1, times:true, kid:"anya"},
     {id:"dollhouse", t:"Create a doll house scene", e:"🧸", d:2, times:true, kid:"anya"},
-    {id:"perform_show", t:"Perform a show", e:"🎭", d:3, times:true, kid:"anya"},
+    {id:"puppet", t:"Create a puppet show", e:"🎭", d:3, times:true, kid:"anya"},
+    {id:"perform_show", t:"Perform a show", e:"🎤", d:3, times:true, kid:"anya"},
   ],
   move: [
-    {id:"trampoline", t:"Trampoline jump session", e:"🤸", d:2, kid:"both"},
+    {id:"trampoline", t:"Trampoline challenge", e:"🤸", d:2, kid:"both"},
+    {id:"obstacle", t:"Obstacle course", e:"🚧", d:2, kid:"both"},
+    {id:"rope_jump", t:"Jump over the rope challenge", e:"🪢", d:1, kid:"both"},
+    {id:"balance", t:"Balance challenge", e:"🤾", d:1, kid:"both"},
+    {id:"dance", t:"Dance challenge", e:"💃", d:2, kid:"both"},
     {id:"football", t:"Football practice", e:"⚽", d:2, kid:"both"},
-    {id:"bike", t:"Bike & scooter loops", e:"🚲", d:2, kid:"both"},
+    {id:"scooter", t:"Scooter ride", e:"🛴", d:2, kid:"both"},
+    {id:"bike", t:"Bike ride", e:"🚲", d:2, kid:"both"},
+    {id:"yoga", t:"Yoga for kids", e:"🧘", d:1, kid:"both"},
+    {id:"stretch", t:"Stretching routine", e:"🤲", d:1, kid:"both"},
     {id:"forest", t:"Forest explorer walk", e:"🌲", d:2, kid:"both"},
     {id:"swim", t:"Swimming", e:"🏊", d:2, kid:"both"},
-    {id:"yoga", t:"Yoga & stretching", e:"🧘", d:1, kid:"both"},
-    {id:"obstacle", t:"Obstacle running challenge", e:"🏃", d:2, kid:"jack"},
+    // ---- easy little exercises for Jack (gentler than push-ups / sit-ups) ----
+    {id:"star_jumps", t:"20 star jumps", e:"⭐", d:1, kid:"jack"},
+    {id:"wall_sit", t:"Wall sit — count to 30", e:"🧱", d:1, kid:"jack"},
+    {id:"plank_hold", t:"Hold a plank — count to 20", e:"📏", d:1, kid:"jack"},
+    {id:"step_ups", t:"20 step-ups on a step", e:"🪜", d:1, kid:"jack"},
+    {id:"jog_spot", t:"Jog on the spot — 1 minute", e:"👟", d:1, kid:"jack"},
+    {id:"toe_touch", t:"Stretch & touch your toes ×10", e:"🙆", d:1, kid:"jack"},
+  ],
+  play: [
+    // ---- Play together ----
+    {id:"board_games", t:"Play a board game", e:"🎲", d:2, times:true, kid:"both", group:"👫 Play together"},
+    {id:"card_game", t:"Play a card game", e:"🃏", d:1, times:true, kid:"both", group:"👫 Play together"},
+    {id:"hide_seek", t:"Play hide and seek", e:"🙈", d:1, times:true, kid:"both", group:"👫 Play together"},
+    {id:"hide_garden", t:"Hide things in the garden to find", e:"🌳", d:2, times:true, kid:"both", group:"👫 Play together"},
+    {id:"fun_with_anya", t:"Play a fun game with Anya", e:"👧", d:2, times:true, kid:"jack", group:"👫 Play together"},
+    {id:"fun_with_jack", t:"Play a fun game with Jack", e:"👦", d:2, times:true, kid:"anya", group:"👫 Play together"},
+    {id:"run_around", t:"Run around & chase games", e:"🏃", d:1, times:true, kid:"both", group:"👫 Play together"},
+    {id:"treasure_hunt", t:"Treasure hunt", e:"🗝️", d:2, times:true, kid:"both", group:"👫 Play together"},
+    {id:"pretend_shop", t:"Pretend shop", e:"🛒", d:1, times:true, kid:"both", group:"👫 Play together"},
+    {id:"restaurant", t:"Restaurant game", e:"🍽️", d:1, times:true, kid:"both", group:"👫 Play together"},
+    {id:"role_play", t:"Family role play", e:"🎭", d:1, times:true, kid:"both", group:"👫 Play together"},
+    // ---- Play alone ----
+    {id:"make_toy", t:"Make a toy to play with", e:"🛠️", d:2, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"outdoor_spot", t:"Build a play spot outside", e:"🏕️", d:2, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"lego_play", t:"Play with LEGO", e:"🧱", d:1, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"trains", t:"Play with trains", e:"🚂", d:1, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"buses", t:"Play with buses & cars", e:"🚌", d:1, times:true, kid:"jack", group:"🧸 Play alone"},
+    {id:"toy_animals", t:"Play with toy animals", e:"🦁", d:1, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"imagination", t:"Make up an imagination story", e:"💭", d:1, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"small_world", t:"Small world play", e:"🏘️", d:1, times:true, kid:"both", group:"🧸 Play alone"},
+    {id:"dolls_play", t:"Play with dolls", e:"🪆", d:1, times:true, kid:"anya", group:"🧸 Play alone"},
+    {id:"patterns", t:"Pattern building (clips, beads, blocks)", e:"🔷", d:1, times:true, kid:"anya", group:"🧸 Play alone"},
+  ],
+  learn: [
+    {id:"read", t:"Read a book", e:"📖", d:2, times:true, kid:"both"},
+    {id:"story_listen", t:"Listen to an audiobook / story", e:"🎧", d:1, times:true, kid:"both"},
+    {id:"puzzle", t:"Do a puzzle", e:"🧩", d:2, times:true, kid:"both"},
+    {id:"learn_subject", t:"Learn about a new subject (space, animals, history…)", e:"🌍", d:2, times:true, kid:"both"},
+    {id:"try_new", t:"Try a brand-new activity", e:"✨", d:2, times:true, kid:"both"},
+    {id:"learn_make", t:"Learn how to make something new", e:"🛠️", d:2, times:true, kid:"both"},
+    {id:"letters_numbers", t:"Practice letters & numbers", e:"🔤", d:1, times:true, kid:"anya"},
+    {id:"writing", t:"Writing practice", e:"✏️", d:2, times:true, kid:"jack"},
+    {id:"maths", t:"Maths practice", e:"🔢", d:2, times:true, kid:"jack"},
+    {id:"journal_learn", t:"Write in my journal", e:"📔", d:2, times:true, kid:"jack"},
+    {id:"learn_topic", t:"Learn about something new", e:"🔎", d:2, times:true, kid:"both"},
   ],
   help: [
     // ---- Football prep (only shows on football days) ----
@@ -2362,14 +2473,12 @@ const MISSIONS = {
     {id:"sweep_patio", t:"Sweep the patio", e:"🧹", d:2, kid:"both", group:"🌱 Outdoor"},
     {id:"garden_cleanup", t:"Garden cleanup", e:"🌿", d:3, kid:"both", group:"🌱 Outdoor"},
     {id:"move_wood", t:"Move wood", e:"🪵", d:3, kid:"jack", group:"🌱 Outdoor"},
-    // ---- Jack's bigger responsibilities ----
-    {id:"organize_toys", t:"Organize outdoor toys", e:"🛴", d:2, kid:"jack", group:"💪 Jack's jobs"},
-    {id:"vacuum", t:"Vacuum my room", e:"🧹", d:3, kid:"jack", group:"💪 Jack's jobs"},
-    {id:"prep_snack", t:"Prepare a simple snack", e:"🥪", d:3, kid:"jack", group:"💪 Jack's jobs"},
-    {id:"read_20", t:"Read for 20 minutes", e:"📚", d:2, kid:"jack", group:"💪 Jack's jobs"},
-    {id:"journal", t:"Write a journal entry", e:"📝", d:2, kid:"jack", group:"💪 Jack's jobs"},
-    {id:"help_anya", t:"Help Anya with a task", e:"👧", d:3, kid:"jack", group:"💪 Jack's jobs"},
-    {id:"garden_helper", t:"Garden helper project", e:"🌻", d:4, kid:"jack", group:"💪 Jack's jobs"},
+    // ---- Jack's bigger responsibilities (older-kid jobs) ----
+    {id:"vacuum", t:"Vacuum my room", e:"🧹", d:3, kid:"jack", group:"💪 Big-kid jobs"},
+    {id:"prep_snack", t:"Make a simple snack for everyone", e:"🥪", d:3, kid:"jack", group:"💪 Big-kid jobs"},
+    {id:"organize_toys", t:"Tidy & organize the outdoor toys", e:"🛴", d:2, kid:"jack", group:"💪 Big-kid jobs"},
+    {id:"help_anya", t:"Help Anya with something", e:"👧", d:3, kid:"jack", group:"💪 Big-kid jobs"},
+    {id:"garden_helper", t:"Big garden helper project", e:"🌻", d:4, kid:"jack", group:"💪 Big-kid jobs"},
     // ---- Paid effort-based jobs ----
     {id:"wash_car", t:"Wash the car", e:"🚗", d:2, kid:"both", group:"💶 Paid jobs",
       tiers:[{label:"Good help", money:2, d:1}, {label:"Did lots, really nicely", money:5, d:2}]},
@@ -2378,24 +2487,64 @@ const MISSIONS = {
   ]
 };
 const PATHS = {
+  move:   {label:"Move",   emoji:"🏃", hero:"hero-move", ci:"ci-move", blurb:"Use your body — run, jump, play!", reward:"Health"},
   create: {label:"Create", emoji:"🎨", hero:"hero-create", ci:"ci-create", blurb:"Make or build something cool!", reward:"Independence"},
-  move:   {label:"Move",   emoji:"🚴", hero:"hero-move", ci:"ci-move", blurb:"Play, jump or run to feel strong and happy!", reward:"Health"},
-  help:   {label:"Help",   emoji:"🫶", hero:"hero-help", ci:"ci-help", blurb:"Help our home feel clean and calm — earn shiny stars!", reward:"Independence"},
+  play:   {label:"Play",   emoji:"🎲", hero:"hero-play", ci:"ci-play", blurb:"Use your imagination — alone or together!", reward:"Imagination"},
+  learn:  {label:"Learn",  emoji:"📚", hero:"hero-learn", ci:"ci-learn", blurb:"Read, puzzle, and discover new things!", reward:"Growth"},
+  help:   {label:"Help",   emoji:"🫶", hero:"hero-help", ci:"ci-help", blurb:"Help our home and family — earn stars & €!", reward:"Responsibility"},
 };
+/* Which categories unlock the screen timer: Move + Create + Play + one Help. */
+const UNLOCK_PATHS = ["move","create","play","help"];
+const ALL_PATHS = ["move","create","play","learn","help"];
 const KID_INFO = { jack:{name:"Jack", av:"🔵", young:false}, anya:{name:"Anya", av:"🟣", young:true} };
 
-/* Adventure Rewards — experiences, not objects. Unlocked with stars. */
+/* Adventure Rewards — experiences (mostly Algarve), tiered so big trips take
+   real, sustained effort. Tiers: treat → mini → adventure3h → dayout → dream.
+   Costs are balanced against ~40–70 pts on a good day so the dream trips are
+   a genuine multi-week savings goal, not a couple of activities. */
+const REWARD_TIERS = {
+  treat:      {label:"🍦 Little treats",        note:"A day or two of good effort"},
+  mini:       {label:"🌟 Mini adventures",      note:"A few days"},
+  adventure3h:{label:"🚂 3-hour adventures",    note:"About a week"},
+  dayout:     {label:"🌅 Half-day & day out",   note:"A couple of weeks"},
+  dream:      {label:"🏆 Big dream adventures",  note:"A month of effort — worth it!"},
+};
 const REWARDS = [
-  {id:"playground", t:"Playground Mission", e:"🛝", cost:50},
-  {id:"cat_hero", t:"Cat Care Hero Day", e:"🐈", cost:60},
-  {id:"nature", t:"Nature Detective Quest", e:"🔎", cost:80},
-  {id:"forest", t:"Dad Forest Adventure", e:"🌲", cost:90},
-  {id:"swim", t:"Swimming Challenge", e:"🏊", cost:90},
-  {id:"picnic", t:"Family Picnic", e:"🧺", cost:100},
-  {id:"build_day", t:"Build Something Together Day", e:"🛠️", cost:100},
-  {id:"bike_adv", t:"Big Bike Adventure", e:"🚵", cost:120},
-  {id:"train", t:"Train Day Out", e:"🚂", cost:150},
-  {id:"treasure", t:"Treasure Hunt", e:"🗺️", cost:150},
+  // 🍦 Little treats
+  {id:"movie_pick", t:"Choose tonight's movie", e:"🎬", cost:40, tier:"treat"},
+  {id:"ice_cream", t:"Ice cream trip", e:"🍦", cost:55, tier:"treat"},
+  {id:"stay_up", t:"Stay up 15 min later", e:"🌙", cost:55, tier:"treat"},
+  {id:"choose_dinner", t:"Choose what's for dinner", e:"🍝", cost:60, tier:"treat"},
+  {id:"bake_treat", t:"Bake a treat with a parent", e:"🧁", cost:70, tier:"treat"},
+  {id:"hot_choc", t:"Hot chocolate café stop", e:"☕", cost:75, tier:"treat"},
+  // 🌟 Mini adventures
+  {id:"playground", t:"Playground of your choice", e:"🛝", cost:100, tier:"mini"},
+  {id:"game_night", t:"Family board-game night", e:"🎲", cost:110, tier:"mini"},
+  {id:"plane_spot", t:"Plane spotting at Faro airport", e:"✈️", cost:130, tier:"mini"},
+  {id:"beach_pm", t:"Beach afternoon", e:"🏖️", cost:140, tier:"mini"},
+  {id:"picnic", t:"Park & picnic", e:"🧺", cost:150, tier:"mini"},
+  {id:"pool", t:"Swimming pool trip", e:"🏊", cost:160, tier:"mini"},
+  // 🚂 3-hour adventures
+  {id:"train_albufeira", t:"Train spotting in Albufeira", e:"🚂", cost:220, tier:"adventure3h"},
+  {id:"train_faro", t:"Train spotting in Faro", e:"🚂", cost:220, tier:"adventure3h"},
+  {id:"minigolf", t:"Mini-golf + a treat", e:"⛳", cost:240, tier:"adventure3h"},
+  {id:"train_lagos", t:"Train spotting in Lagos", e:"🚂", cost:250, tier:"adventure3h"},
+  {id:"ride_train", t:"Go for a ride on the train", e:"🚆", cost:270, tier:"adventure3h"},
+  {id:"nature_pm", t:"Forest & nature explorer afternoon", e:"🌲", cost:270, tier:"adventure3h"},
+  {id:"bike_dunes", t:"Bike trip to the sand-jumping dunes", e:"🚵", cost:300, tier:"adventure3h"},
+  // 🌅 Half-day & day out
+  {id:"bus_anywhere", t:"Bus anywhere in the Algarve — you choose!", e:"🚌", cost:450, tier:"dayout"},
+  {id:"faro_day", t:"Faro old town & marina day", e:"⛵", cost:480, tier:"dayout"},
+  {id:"lagos_day", t:"Day out in Lagos (boats & old town)", e:"🛥️", cost:520, tier:"dayout"},
+  {id:"beach_day", t:"Big beach day with bodyboards", e:"🏄", cost:540, tier:"dayout"},
+  {id:"zoo_day", t:"Zoo / animal park day", e:"🦒", cost:600, tier:"dayout"},
+  {id:"waterpark", t:"Waterpark half-day", e:"💦", cost:650, tier:"dayout"},
+  // 🏆 Big dream adventures
+  {id:"sleepover_camp", t:"Backyard camp / sleepover night", e:"⛺", cost:850, tier:"dream"},
+  {id:"boat_trip", t:"Dolphin & boat trip", e:"🐬", cost:950, tier:"dream"},
+  {id:"big_train", t:"Big train journey adventure", e:"🚄", cost:1000, tier:"dream"},
+  {id:"theme_park", t:"Full theme-park day", e:"🎢", cost:1100, tier:"dream"},
+  {id:"choose_day", t:"Choose a WHOLE family day out", e:"🌈", cost:1200, tier:"dream"},
 ];
 
 /* Hotspot Attack zones — everyone picks one messy area to make BETTER (not perfect). */
@@ -2452,8 +2601,8 @@ function missionsForPath(p){
   });
 }
 /* a "path complete" = at least one mission done in that path */
-function pathDone(p){ const d=kidState().done; return MISSIONS[p].some(m=>d[m.id]); }
-function pathsComplete(){ return ["create","move","help"].every(pathDone); }
+function pathDone(p){ const d=kidState().done; return (MISSIONS[p]||[]).some(m=>d[m.id]); }
+function pathsComplete(){ return UNLOCK_PATHS.every(pathDone); }
 
 function renderKid(){
   // header
@@ -2511,16 +2660,19 @@ function renderKidDay(s){
     <div class="kid-hero hero-home"><div class="badge">📅</div><div><h2>What kind of day is today?</h2><p>This sets up the right missions.</p></div></div>
     <div class="kid-choices">
       <button class="choice" onclick="setDayType('school')"><div class="ci ci-school">🎒</div><div class="cmeta"><b>School Day</b><span>You already did the big one — school!</span></div><div class="cgo">→</div></button>
-      <button class="choice" onclick="setDayType('weekend')"><div class="ci ci-weekend">🌈</div><div class="cmeta"><b>Weekend / Holiday</b><span>Choose one mission from each path.</span></div><div class="cgo">→</div></button>
-      <button class="choice" onclick="setDayType('special')"><div class="ci ci-special">🎉</div><div class="cmeta"><b>Special Day</b><span>Birthday, trip, or a one-off adventure.</span></div><div class="cgo">→</div></button>
+      <button class="choice" onclick="setDayType('weekend')"><div class="ci ci-weekend">🌈</div><div class="cmeta"><b>No School Day</b><span>Choose one mission from each path.</span></div><div class="cgo">→</div></button>
+      <button class="choice" onclick="setDayType('special')"><div class="ci ci-special">🎉</div><div class="cmeta"><b>Weekend / Special Day</b><span>Birthday, trip, or a one-off adventure.</span></div><div class="cgo">→</div></button>
+      <button class="choice" onclick="setDayType('sick')"><div class="ci" style="background:#f5e7d0;">🤒</div><div class="cmeta"><b>I'm Not Feeling Well</b><span>Take it gentle today — small steps only.</span></div><div class="cgo">→</div></button>
     </div>`;
 }
 function setDayType(t){ state.dayType=t; persist(); kidView="paths"; renderKid(); }
 
 function renderKidPaths(s){
+  if(state.dayType==="sick") return renderSickDay(s);
   const info = KID_INFO[kidCur];
-  const doneCount = ["create","move","help"].filter(pathDone).length;
-  const pct = Math.round(doneCount/3*100);
+  const cards = ALL_PATHS;
+  const doneCount = UNLOCK_PATHS.filter(pathDone).length;
+  const pct = Math.round(doneCount/UNLOCK_PATHS.length*100);
   const pathCard = (p)=>{
     const done = pathDone(p);
     return `<button class="path-big pb-${p} ${done?'done':''}" onclick="kidOpenPath('${p}')">
@@ -2534,7 +2686,7 @@ function renderKidPaths(s){
       <div class="paths-hello">Hi ${info.av} ${info.name}! Pick your missions:</div>
       <div class="mini-bar"><div class="mini-fill" style="width:${pct}%"></div></div>
     </div>
-    <div class="path-bigs">${pathCard('create')}${pathCard('move')}${pathCard('help')}</div>
+    <div class="path-bigs">${cards.map(pathCard).join("")}</div>
     ${renderTimerGate()}
     <div style="margin-top:16px;">
       ${isFootballDay() ? `<button class="extra-tile et-football" onclick="kidGo('football')">
@@ -2553,20 +2705,92 @@ function renderKidPaths(s){
 function kidOpenPath(p){ kidView="path:"+p; renderKid(); window.scrollTo(0,0); }
 function kidGo(v){ kidView=v; renderKid(); window.scrollTo(0,0); }
 
-/* Timer prerequisites:
-   Non-school day → Morning routine FIRST, then one mission in each path.
-   School day     → one mission in each path (routine handled in the evening). */
+/* ---- Sick / recovery day: gentle get-better tasks (parent or AI can set them) ---- */
+function recoveryList(){
+  // specific tasks the parent/AI added today, then the always-on basics
+  const specific = (state.recovery.tasks && state.recovery.tasks[kidCur]) || [];
+  return specific.concat(recoveryBasics());
+}
+function recoveryDoneState(){ const r=kidState().routine||{}; return recoveryList().every(t=>r["rec_"+t.id]); }
+function renderSickDay(s){
+  const info = KID_INFO[kidCur];
+  const list = recoveryList();
+  const ks = kidState();
+  const doneN = list.filter(t=>ks.routine["rec_"+t.id]).length;
+  const pct = list.length?Math.round(doneN/list.length*100):0;
+  const allDone = doneN===list.length && list.length>0;
+  const parentNote = (state.recovery.note||"").trim();
+  s.innerHTML = `
+    <div class="kid-hero" style="background:#eaf3fb;"><div class="badge">🤒</div>
+      <div><h2>Get Better, ${info.name} 💛</h2>
+      <p>Resting is your big job today. Even when we don't feel great, we can still be a little bit strong, gentle and kind. Do these get-better steps when you can — no rushing.</p></div></div>
+    ${parentNote?`<div class="note-card" style="margin-bottom:14px;"><div class="heart">💌</div><p>${esc(parentNote)}</p></div>`:""}
+    <div class="progress-wrap">
+      <div class="progress-head"><span class="ptitle">🌡️ Feel-better steps</span><span class="ppct">${pct}%</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-count">${doneN} / ${list.length} done — every little bit helps you heal</div>
+    </div>
+    <div id="recList"></div>
+    ${allDone
+      ? `<div class="timer-card timer-open"><div class="tbig">🌟 Well done taking care of yourself!</div>
+          <div class="tsub">You did your get-better steps. A little gentle screen time can be requested now — a parent will decide.</div>
+          <button class="btn-request" onclick="requestTimer()" ${ks.timerRequested?'disabled':''}>${ks.timerRequested?'⏳ Waiting for a parent…':'🙋 Ask for some gentle screen time'}</button>
+          ${ks.timerRequested?`<button class="btn-request" onclick="startScreenTime()" style="margin-top:8px;">▶ Parent said yes — start</button>`:''}</div>`
+      : `<div class="timer-card timer-locked"><div class="tbig">💛 Do your feel-better steps first</div><div class="tsub">When they're all ticked, you can ask for a little gentle screen time.</div></div>`}
+    <div class="kid-msg">We love you. Getting better IS the mission today. 💛</div>`;
+  const box=document.getElementById("recList");
+  list.forEach(t=>{
+    const done=!!ks.routine["rec_"+t.id];
+    const row=document.createElement("div"); row.className="mission";
+    row.innerHTML=`<div class="mi">${t.e}</div><div class="mbody"><div class="mtitle">${esc(t.t)}</div></div>
+      <button class="mstar ${done?'done':''}">${done?'✓ Done':'Do it'}</button>`;
+    row.querySelector(".mstar").addEventListener("click",()=>{
+      const key="rec_"+t.id; if(ks.routine[key]) delete ks.routine[key]; else { ks.routine[key]=true; toast("✓ "+t.t); }
+      persist(); renderKid();
+    });
+    box.appendChild(row);
+  });
+}
+
+/* Timer prerequisites — depend on the day-type:
+   School day → Move + Create + Play + one Help.
+   No-school  → Morning routine + Create + Move + one Help (Play & Learn are bonus,
+                not required), and screen can only be REQUESTED from ~midday.
+   Evening (after 6pm) → evening routine too. */
 function timerPrereqs(){
-  const reqs = [
-    { ok:pathDone('create'), label:"🎨 One Create mission", go:()=>kidOpenPath('create') },
-    { ok:pathDone('move'), label:"🚴 One Move mission", go:()=>kidOpenPath('move') },
-    { ok:pathDone('help'), label:"🫶 One Help mission", go:()=>kidOpenPath('help') },
-  ];
-  if(state.dayType && state.dayType!=="school"){
-    reqs.unshift({ ok:routineDone(), label:"🌅 Morning routine", routine:true });
+  const noSchool = state.dayType && state.dayType!=="school";
+  let reqs;
+  if(noSchool){
+    reqs = [
+      { ok:routineDone(), label:"🌅 Morning routine", routine:true },
+      { ok:pathDone('create'), label:"🎨 One Create mission (use your mind)", go:()=>kidOpenPath('create') },
+      { ok:pathDone('move'),   label:"🏃 One Move mission (use your body)",  go:()=>kidOpenPath('move') },
+      { ok:pathDone('help'),   label:"🫶 One Help mission (e.g. help breakfast)", go:()=>kidOpenPath('help') },
+    ];
+  } else {
+    reqs = [
+      { ok:pathDone('move'),   label:"🏃 One Move mission",   go:()=>kidOpenPath('move') },
+      { ok:pathDone('create'), label:"🎨 One Create mission", go:()=>kidOpenPath('create') },
+      { ok:pathDone('play'),   label:"🎲 One Play mission",   go:()=>kidOpenPath('play') },
+      { ok:pathDone('help'),   label:"🫶 One Help mission",   go:()=>kidOpenPath('help') },
+    ];
+  }
+  // No-school day: screen can't even be requested until ~midday (≈4h after waking)
+  if(noSchool && new Date().getHours() < NOSCHOOL_SCREEN_HOUR){
+    reqs.push({ ok:false, label:"⏰ Screen time opens around midday", wait:true });
+  }
+  // Evening lock: from ~6pm, the evening routine must be done before screen time
+  if(isEveningLock()){
+    reqs.push({ ok:eveningRoutineDone(), label:"🌙 Evening routine (it's getting late)", evening:true });
   }
   return reqs;
 }
+function isEveningLock(){ return new Date().getHours() >= 18; }
+function eveningSteps(){
+  const r = ROUTINES.evening;
+  return KID_INFO[kidCur].young ? r.base : r.base.concat(r.jackExtra||[]);
+}
+function eveningRoutineDone(){ const r=kidState().routine||{}; return eveningSteps().every(st=>r[st.id]); }
 function renderTimerGate(){
   const ks = kidState();
   const reqs = timerPrereqs();
@@ -2577,23 +2801,29 @@ function renderTimerGate(){
       <span style="font-weight:700;${r.ok?'color:var(--sage-deep);':''}">${r.label}</span>
       ${r.ok?'':'<span style="margin-left:auto;color:var(--ink-soft);font-size:.8rem;">tap →</span>'}
     </div>`).join("")}</div>`;
-  // inline morning-routine checklist on non-school days (no separate tab)
-  let routineBox = "";
-  if(state.dayType && state.dayType!=="school" && !routineDone()){
-    const steps = routineSteps();
-    routineBox = `<div style="text-align:left;background:#fff;border-radius:14px;padding:10px 12px;margin:8px 0;">
-      <div style="font-weight:800;margin-bottom:6px;">🌅 Morning routine first</div>
-      ${steps.map(st=>{
-        const d=!!ks.routine[st.id];
+  // inline routine checklist(s) — morning (non-school) and evening (after 6pm)
+  const routineBlock = (title, steps)=> `<div style="text-align:left;background:#fff;border-radius:14px;padding:10px 12px;margin:8px 0;">
+      <div style="font-weight:800;margin-bottom:6px;">${title}</div>
+      ${steps.map(st=>{ const d=!!ks.routine[st.id];
         return `<div onclick="toggleRoutineStep('${st.id}')" style="display:flex;align-items:center;gap:9px;padding:6px 2px;cursor:pointer;">
-          <span style="font-size:1.1rem;">${d?'✅':'⬜'}</span><span>${st.e} ${st.t}</span></div>`;
-      }).join("")}
+          <span style="font-size:1.1rem;">${d?'✅':'⬜'}</span><span>${st.e} ${st.t}</span></div>`; }).join("")}
     </div>`;
+  let routineBox = "";
+  if(state.dayType && state.dayType!=="school" && !routineDone()) routineBox += routineBlock("🌅 Morning routine first", routineSteps());
+  if(isEveningLock() && !eveningRoutineDone()) routineBox += routineBlock("🌙 Evening routine (it's getting late)", eveningSteps());
+
+  // if a screen session is running, show the live countdown instead of the request button
+  if(ks.screenEndsAt && ks.screenEndsAt > Date.now()){
+    return `<div class="timer-card timer-open"><div class="tbig">📱 Screen time running</div>
+      <div class="hot-timer" id="screenCountdown">${fmtCountdown(ks.screenEndsAt-Date.now())}</div>
+      <div class="tsub">When this ends, you'll need to earn your missions again for the next one.</div>
+      <button class="btn-request" onclick="endScreenTime()" style="background:#e3ddd2;color:#7a6;">⏹ End early</button></div>`;
   }
   if(allOk){
     return `<div class="timer-card timer-open"><div class="tbig">🎉 Ready!</div>${checklist}
       <div class="tsub">A timer may now be <b>requested</b> — it is not automatic. A parent will decide.</div>
-      <button class="btn-request" onclick="requestTimer()" ${ks.timerRequested?'disabled':''}>${ks.timerRequested?'⏳ Asked a parent':'🙋 Request a timer'}</button></div>`;
+      <button class="btn-request" onclick="requestTimer()" ${ks.timerRequested?'disabled':''}>${ks.timerRequested?'⏳ Waiting for a parent…':'🙋 Request a timer'}</button>
+      ${ks.timerRequested?`<button class="btn-request" onclick="startScreenTime()" style="margin-top:8px;">▶ Parent approved — start 45 min</button>`:''}</div>`;
   }
   return `<div class="timer-card timer-locked"><div class="tbig">🔒 Finish these to unlock the timer</div>${checklist}${routineBox}
     <button class="btn-request" disabled>🙋 Request a timer</button></div>`;
@@ -2603,6 +2833,36 @@ function toggleRoutineStep(id){
 }
 function timerReqGo(i){ const reqs=timerPrereqs(); const r=reqs[i]; if(r&&!r.ok&&r.go) r.go(); }
 function requestTimer(){ kidState().timerRequested=true; persist(); renderKid(); toast("Sent to a parent to approve 🙋"); }
+
+/* ---- Screen-time session: 45 min, then auto-reset the unlock missions ---- */
+const SCREEN_MINUTES = 45;
+let screenInterval=null;
+function fmtCountdown(ms){ const s=Math.max(0,Math.round(ms/1000)); return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); }
+function startScreenTime(){
+  const ks=kidState();
+  ks.screenEndsAt = Date.now() + SCREEN_MINUTES*60*1000;
+  ks.timerRequested = false;
+  persist(); renderKid(); startScreenLoop();
+  toast("📱 45 minutes — enjoy! It resets after.");
+}
+function startScreenLoop(){
+  clearInterval(screenInterval);
+  screenInterval=setInterval(()=>{
+    const ks=kidState();
+    if(!ks.screenEndsAt){ clearInterval(screenInterval); return; }
+    const el=document.getElementById("screenCountdown");
+    if(el) el.textContent=fmtCountdown(ks.screenEndsAt-Date.now());
+    if(Date.now()>=ks.screenEndsAt){ clearInterval(screenInterval); endScreenTime(true); }
+  },1000);
+}
+function endScreenTime(auto){
+  const ks=kidState();
+  ks.screenEndsAt=0;
+  // reset the unlock missions so they must be re-earned for the next session
+  UNLOCK_PATHS.forEach(p=>{ (MISSIONS[p]||[]).forEach(m=>{ if(ks.done[m.id]){ const rec=ks.done[m.id]; /* keep the points already earned; just clear the 'done' flag */ delete ks.done[m.id]; } }); });
+  persist(); renderKid();
+  toast(auto?"⏰ Screen time finished — earn your missions again for more 💛":"Screen time ended.");
+}
 
 function renderKidMissions(s, p){
   const path = PATHS[p];
@@ -2627,9 +2887,12 @@ function buildMissionRow(m, p, ks){
   const done = !!rec;
   const row = document.createElement("div");
   row.className="mission";
-  // difficulty + points badge (tiered jobs show their range badge instead)
+  // points badge. Timed activities pay by minutes (5–20); others by difficulty.
   const pts = pointsFor(m.d);
-  const diffBadge = m.tiers ? "" : `<span class="tag" title="${DIFF_NAME[m.d]||''}">${diffStars(m.d)} ${pts} pts</span>`;
+  let diffBadge = "";
+  if(m.tiers) diffBadge = "";
+  else if(m.times) diffBadge = `<span class="tag" title="Points depend on how long you focus — a full hour is worth the most!">⏱ 5–30 pts</span>`;
+  else diffBadge = `<span class="tag" title="${DIFF_NAME[m.d]||''}">${diffStars(m.d)} ${pts} pts</span>`;
   // badge: for tiered jobs show the range — € if paid, else points
   let moneyBadge = "";
   if(m.tiers){
@@ -2647,8 +2910,8 @@ function buildMissionRow(m, p, ks){
   } else {
     actionHTML = `<button class="mstar ${done?'done':''}" data-act="${done?'undo':'do'}">${done?'✓ Done!':'+'+pts}</button>`;
   }
-  // focus-timer chips for creative activities (and any with times:true)
-  const timerHTML = (m.times && !done) ? `<div class="mtimes">${[15,30,45,60].map(t=>`<button class="mtime" data-min="${t}">⏱ ${t}m</button>`).join("")}</div>` : "";
+  // focus-timer chips — points scale with TIME spent (15→5 … 60→20)
+  const timerHTML = (m.times && !done) ? `<div class="mtimes">${[15,30,45,60].map(t=>`<button class="mtime" data-min="${t}">⏱ ${t}m · ${TIME_PTS[t]}</button>`).join("")}</div>` : "";
   row.innerHTML = `
     <div class="mi">${m.e}</div>
     <div class="mbody">
@@ -2666,10 +2929,16 @@ function buildMissionRow(m, p, ks){
   }));
   return row;
 }
-/* ---- Activity focus timer: pick minutes → countdown → Finished awards points ---- */
-let actInterval=null, actSecs=0, actMission=null, actPath=null;
+/* ---- Activity focus timer: pick minutes → countdown → Finished awards points by TIME ---- */
+let actInterval=null, actSecs=0, actMission=null, actPath=null, actMins=0;
+function pointsForMinutes(mins){
+  // accelerating bands — a full hour is worth noticeably more than 4×15
+  const m = Math.min(60, Math.max(0, Math.round(mins)));
+  if(m>=60) return 30; if(m>=45) return 20; if(m>=30) return 12; if(m>=15) return 5;
+  return Math.max(0, Math.round(m/3)); // <15 min: a few points, scaled
+}
 function startActivityTimer(m, p, mins){
-  actMission=m; actPath=p; actSecs=mins*60;
+  actMission=m; actPath=p; actSecs=mins*60; actMins=mins;
   clearInterval(actInterval);
   document.getElementById("actEmoji").textContent=m.e;
   document.getElementById("actTitle").textContent=m.t;
@@ -2687,8 +2956,14 @@ function startActivityTimer(m, p, mins){
 function finishActivity(){
   clearInterval(actInterval); actInterval=null;
   document.getElementById("activityModal").classList.remove("show");
-  if(actMission && !kidState().done[actMission.id]){ toggleMission(actMission, actPath, null); }
-  actMission=null;
+  if(actMission && !kidState().done[actMission.id]){
+    // points = the actual minutes focused (full band if the countdown reached 0, else elapsed)
+    const elapsed = actMins - Math.ceil(actSecs/60);
+    const minsDone = actSecs<=0 ? actMins : Math.max(0, elapsed);
+    const pts = pointsForMinutes(minsDone);
+    toggleMission(actMission, actPath, null, pts);
+  }
+  actMission=null; actMins=0;
 }
 function cancelActivity(){
   clearInterval(actInterval); actInterval=null;
@@ -2696,7 +2971,7 @@ function cancelActivity(){
   actMission=null;
 }
 
-function toggleMission(m, p, tierIdx){
+function toggleMission(m, p, tierIdx, ptsOverride){
   const ks = kidState();
   const rec = ks.done[m.id];
   if(rec){
@@ -2708,7 +2983,8 @@ function toggleMission(m, p, tierIdx){
     delete ks.done[m.id];
   } else {
     let stars, money = m.money||0, label = null;
-    if(m.tiers){ const ti = m.tiers[tierIdx||0]; stars = pointsFor(ti.d); money = ti.money; label = ti.label; }
+    if(typeof ptsOverride==="number"){ stars = ptsOverride; }   // timed activity: points by minutes
+    else if(m.tiers){ const ti = m.tiers[tierIdx||0]; stars = pointsFor(ti.d); money = ti.money; label = ti.label; }
     else { stars = pointsFor(m.d); }
     const point = (p==="help"||p==="create"||p==="move");
     ks.done[m.id] = { date: todayKey(), stars, money, tierLabel: label, point };
@@ -2728,26 +3004,49 @@ function kidBack(){
   renderKid();
 }
 
-/* ---- Adventure Rewards ---- */
+/* ---- Adventure Rewards (tiered, with "saving up" progress) ---- */
 function renderRewards(s){
   const ks = kidState();
+  // next affordable goal the kid is closest to (not yet got, can't afford yet)
+  const upcoming = REWARDS.filter(r=>!ks.rewards.includes(r.id) && ks.stars < r.cost).sort((a,b)=>a.cost-b.cost)[0];
+  let goalHTML = "";
+  if(upcoming){
+    const pct = Math.min(100, Math.round(ks.stars/upcoming.cost*100));
+    goalHTML = `<div class="progress-wrap" style="margin-bottom:16px;">
+      <div class="progress-head"><span class="ptitle">${upcoming.e} Saving up for: ${esc(upcoming.t)}</span><span class="ppct">${pct}%</span></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-count">${ks.stars} / ${upcoming.cost} ⭐ · ${Math.max(0,upcoming.cost-ks.stars)} to go</div>
+    </div>`;
+  }
   s.innerHTML = `
-    <div class="kid-hero hero-home"><div class="badge">🏆</div><div><h2>Adventure Rewards</h2><p>You unlock real adventures — not toys. You have <b>⭐ ${ks.stars} stars</b>.</p></div></div>
+    <div class="kid-hero hero-home"><div class="badge">🏆</div><div><h2>Adventure Rewards</h2><p>Real adventures, not toys. You have <b>⭐ ${ks.stars} stars</b>. Save up — the big trips are worth it!</p></div></div>
+    ${goalHTML}
     <div id="rewardList"></div>`;
   const box = document.getElementById("rewardList");
-  REWARDS.forEach(r=>{
-    const got = ks.rewards.includes(r.id);
-    const canAfford = ks.stars >= r.cost;
-    const row = document.createElement("div");
-    row.className = "reward-card "+(got?"unlocked":(canAfford?"":"locked"));
-    row.innerHTML = `
-      <div class="ri">${r.e}</div>
-      <div class="rbody"><b>${r.t}</b><span>${got?'Unlocked — ask a parent to plan it! 🎉':'Costs ⭐ '+r.cost+' stars'}</span></div>
-      ${got ? `<span class="rgot">✓ Got it</span>`
-            : `<button class="runlock" ${canAfford?'':'disabled'}>Unlock ⭐${r.cost}</button>`}`;
-    const btn = row.querySelector(".runlock");
-    if(btn) btn.addEventListener("click",()=>unlockReward(r));
-    box.appendChild(row);
+  Object.keys(REWARD_TIERS).forEach(tierKey=>{
+    const tier = REWARD_TIERS[tierKey];
+    const items = REWARDS.filter(r=>r.tier===tierKey);
+    if(!items.length) return;
+    const h=document.createElement("div"); h.className="group-head";
+    h.innerHTML = `${tier.label} <span style="font-weight:600;color:var(--ink-soft);font-size:.8rem;">· ${tier.note}</span>`;
+    box.appendChild(h);
+    items.forEach(r=>{
+      const got = ks.rewards.includes(r.id);
+      const canAfford = ks.stars >= r.cost;
+      const row = document.createElement("div");
+      row.className = "reward-card "+(got?"unlocked":(canAfford?"":"locked"));
+      const sub = got ? "Unlocked — ask a parent to plan it! 🎉"
+        : canAfford ? "You can get this now! 🎉"
+        : `${Math.max(0,r.cost-ks.stars)} ⭐ to go`;
+      row.innerHTML = `
+        <div class="ri">${r.e}</div>
+        <div class="rbody"><b>${esc(r.t)}</b><span>${sub}</span></div>
+        ${got ? `<span class="rgot">✓ Got it</span>`
+              : `<button class="runlock" ${canAfford?'':'disabled'}>⭐${r.cost}</button>`}`;
+      const btn = row.querySelector(".runlock");
+      if(btn) btn.addEventListener("click",()=>unlockReward(r));
+      box.appendChild(row);
+    });
   });
 }
 function unlockReward(r){
@@ -2893,12 +3192,12 @@ function renderKidWorkHours(s){
 /* ---- Kid Calendar: colorful time blocks for today (read-only, friendly) ---- */
 function renderKidCalendar(s){
   const d = new Date();
-  const dk = dowKeyOf(d);
-  // show only blocks for everyone ("both") or for THIS child
-  const blocks = (state.rhythm.days[dk]||[])
+  // use the plan for the chosen day-type (fixes: no-school day was showing School)
+  const blocks = dayPlanFor(d)
     .filter(b=>!b.who || b.who==="both" || b.who===kidCur)
     .slice().sort((a,b)=>t2m(a.start)-t2m(b.start));
-  const dayName = d.toLocaleDateString(undefined,{weekday:"long"});
+  const dayLabel = {school:"School day",weekend:"No-school day",special:"Special day",sick:"Rest day"}[state.dayType] || d.toLocaleDateString(undefined,{weekday:"long"});
+  const dayName = dayLabel;
   const log = state.rhythm.log[todayKey(d)]||{};
   s.innerHTML = `
     <div class="kid-hero hero-home"><div class="badge">🗓️</div><div><h2>My Day Plan</h2><p>${dayName} — here's our day in colorful blocks. Tap ✓ when you finish one!</p></div></div>
