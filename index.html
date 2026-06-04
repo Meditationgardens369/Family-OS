@@ -403,6 +403,10 @@
   .kid-hero { display:flex; align-items:center; gap:16px; border-radius:24px; padding:18px; margin-bottom:18px; box-shadow:var(--shadow-soft); }
   .kid-hero .badge { width:92px;height:92px;border-radius:20px;flex:none;display:flex;align-items:center;justify-content:center;
     font-size:3rem;background:#fff;box-shadow:var(--shadow-soft); }
+  /* real date card (shows today's actual date instead of the static 📅 emoji) */
+  .kid-hero .datecard { flex-direction:column; gap:0; overflow:hidden; padding:0; background:#fff; }
+  .datecard .dc-mon { width:100%; background:#e06b6b; color:#fff; font-size:.95rem; font-weight:800; letter-spacing:.5px; padding:6px 0; text-align:center; }
+  .datecard .dc-day { font-size:2.6rem; font-weight:800; color:var(--ink); line-height:1; padding:8px 0 4px; }
   .kid-hero h2 { margin:0; font-size:1.5rem; }
   .kid-hero p { margin:4px 0 0; font-size:.95rem; color:var(--ink); opacity:.8; }
   .hero-create{ background:#efe7f7; } .hero-create h2{ color:#7d5ba6; }
@@ -893,6 +897,25 @@
         <textarea id="wh_message" rows="2"></textarea>
       </label>
       <button class="btn btn-ghost sm" onclick="saveWorkMessage()">Save message</button>
+    </div>
+
+    <div class="card accent-sky" style="margin-top:14px;">
+      <h3>🤒 Sick-day get-better tasks</h3>
+      <p class="hint">Set today's recovery steps. When a child picks "I'm not feeling well", these show as their gentle to-dos (water, healthy food &amp; rest are always added automatically). Tip: you can also just say it in the Brain Dump tab and let AI fill these in.</p>
+      <label class="field" style="max-width:220px;"><span>For which child</span>
+        <select id="rec_kid" onchange="renderRecoveryEditor()"><option value="jack">Jack</option><option value="anya">Anya</option></select>
+      </label>
+      <div style="font-size:.8rem;font-weight:700;color:var(--ink-soft);margin:4px 0 6px;">Quick-add common steps:</div>
+      <div id="recLibrary" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+        <label class="field" style="flex:1;min-width:160px;margin:0;"><span>Or add your own step</span><input type="text" id="rec_custom" placeholder="e.g. Cough syrup at lunch" /></label>
+        <button class="btn btn-sage sm" onclick="addCustomRecovery()">＋ Add</button>
+      </div>
+      <div id="recEditor"></div>
+      <label class="field" style="margin-top:12px;"><span>Kind message for the sick child (optional)</span>
+        <textarea id="rec_message" rows="2" placeholder="e.g. Rest up Jack, we love you — small steps today 💛"></textarea>
+      </label>
+      <button class="btn btn-ghost sm" onclick="saveRecoveryMessage()">Save message</button>
     </div>
   </section>
 
@@ -1386,13 +1409,36 @@ function noSchoolDayBlocks(){
     mk("20:30","21:30","Jack: evening routine & bed","routine","📖","jack"),
   ];
 }
+/* Football evening (late game): evening routine BEFORE we leave → early dinner →
+   football 19:30–21:30 → home for a small fruit/snack → straight to bed. */
+function footballBlocks(){
+  const mk=(start,end,title,cat,icon)=>({id:"fb_"+start.replace(":",""),start,end,title,cat,icon:icon||"",who:"both"});
+  return [
+    mk("18:00","18:30","Evening routine BEFORE we leave (teeth, get ready)","routine","🪥"),
+    mk("18:30","19:00","Early dinner before football","meal","🍽️"),
+    mk("19:30","21:30","⚽ Football (late game!)","move","⚽"),
+    mk("21:30","21:50","Home — fruit or a small snack","meal","🍎"),
+    mk("21:50","22:10","Straight to bed 😴","sleep","🛏️"),
+  ];
+}
 /* The day-plan the KID sees, chosen by today's day-type (not just the weekday).
    school → that weekday's stored rhythm (has the School block).
-   weekend/special → the no-school template.  sick → none (recovery list instead). */
+   weekend/special → the no-school template.  sick → none (recovery list instead).
+   On football days, the late-afternoon/evening blocks are swapped for the football routine. */
 function dayPlanFor(d){
   if(state.dayType==="sick") return [];
-  if(state.dayType && state.dayType!=="school") return noSchoolDayBlocks();
-  return blocksFor(d);   // school day (or no day-type chosen) → stored weekday rhythm
+  let blocks;
+  if(state.dayType && state.dayType!=="school") blocks = noSchoolDayBlocks().slice();
+  else blocks = blocksFor(d).slice();   // school day → stored weekday rhythm
+  if(isFootballDay()){
+    // football takes over the evening (from ~17:15 → bed); drop anything overlapping it
+    // (incl. the normal dinner & swimming) so there's no double-dinner
+    const winStart=t2m("17:15"), winEnd=t2m("22:10");
+    blocks = blocks.filter(b=> t2m(b.end)<=winStart || t2m(b.start)>=winEnd);
+    blocks = blocks.concat(footballBlocks());
+    blocks.sort((a,b)=>t2m(a.start)-t2m(b.start));
+  }
+  return blocks;
 }
 /* When can screen time be REQUESTED on a no-school day — about midday. */
 const NOSCHOOL_SCREEN_HOUR = 12;
@@ -1444,6 +1490,19 @@ function recoveryBasics(){
     {id:"gentle_try", t:"Do one small kind or gentle thing if you can", e:"💛"},
   ];
 }
+/* Common get-better tasks a parent can one-tap add on a sick day (and AI can use). */
+const RECOVERY_LIBRARY = [
+  {id:"steam", t:"Steam with essential oils", e:"♨️"},
+  {id:"nose_rinse", t:"Nose irrigation / rinse", e:"👃"},
+  {id:"gargle", t:"Gargle with salt water", e:"🫧"},
+  {id:"blow_nose", t:"Gently blow & clean your nose", e:"🤧"},
+  {id:"medicine", t:"Take your medicine", e:"💊"},
+  {id:"warm_drink", t:"Warm honey & lemon drink", e:"🍯"},
+  {id:"temp", t:"Let a parent check your temperature", e:"🌡️"},
+  {id:"vitamins", t:"Take vitamins", e:"🍊"},
+  {id:"nap", t:"Have a nap or quiet lie-down", e:"😴"},
+  {id:"fresh_air", t:"A little fresh air at the window", e:"🪟"},
+];
 
 function loadState(){
   try {
@@ -1908,7 +1967,50 @@ const WH_DAYNAME = {mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",
 function bindWorkHours(){
   const msg=document.getElementById("wh_message"); if(msg) msg.value = state.workHours.note||"";
   renderWorkHoursEditor();
+  bindRecoveryEditor();
 }
+/* ---- Sick-day recovery editor (parent) ---- */
+function recKid(){ const sel=document.getElementById("rec_kid"); return sel?sel.value:"jack"; }
+function bindRecoveryEditor(){
+  const msg=document.getElementById("rec_message"); if(msg) msg.value = state.recovery.note||"";
+  const lib=document.getElementById("recLibrary");
+  if(lib){
+    lib.innerHTML="";
+    RECOVERY_LIBRARY.forEach(item=>{
+      const b=document.createElement("button"); b.className="mtime"; b.style.cursor="pointer";
+      b.textContent=`${item.e} ${item.t}`;
+      b.onclick=()=>addRecoveryTask(item.t, item.e);
+      lib.appendChild(b);
+    });
+  }
+  renderRecoveryEditor();
+}
+function renderRecoveryEditor(){
+  const box=document.getElementById("recEditor"); if(!box) return;
+  const k=recKid();
+  const list=(state.recovery.tasks[k]||[]);
+  if(!list.length){ box.innerHTML=`<p class="hint" style="margin:0;">No specific get-better tasks for ${KID_INFO[k].name} yet — water, healthy food &amp; rest are always shown.</p>`; return; }
+  box.innerHTML="";
+  list.forEach((t,i)=>{
+    const row=document.createElement("div"); row.className="contrib"; row.style.marginBottom="6px";
+    row.innerHTML=`<span class="name">${t.e||"🩹"} ${esc(t.t)}</span><button class="btn btn-ghost sm">🗑</button>`;
+    row.querySelector("button").onclick=()=>{ state.recovery.tasks[k].splice(i,1); persist(); renderRecoveryEditor(); toast("Removed"); };
+    box.appendChild(row);
+  });
+}
+function addRecoveryTask(t, e){
+  const k=recKid();
+  if(!state.recovery.tasks[k]) state.recovery.tasks[k]=[];
+  if(state.recovery.tasks[k].some(x=>x.t===t)){ toast("Already added"); return; }
+  state.recovery.tasks[k].push({ id:"r"+Math.random().toString(36).slice(2,7), t, e:e||"🩹" });
+  persist(); renderRecoveryEditor(); toast("Added 🤒");
+}
+function addCustomRecovery(){
+  const inp=document.getElementById("rec_custom"); const t=inp.value.trim();
+  if(!t){ toast("Type a step first"); return; }
+  addRecoveryTask(t, "🩹"); inp.value="";
+}
+function saveRecoveryMessage(){ state.recovery.note=document.getElementById("rec_message").value; persist(); toast("Message saved 💛"); }
 function renderWorkHoursEditor(){
   const box=document.getElementById("whEditor"); if(!box) return;
   const days = state.workHours.days||{};
@@ -2656,8 +2758,14 @@ function renderKidProfiles(s){
 function kidPick(k){ kidCur=k; kidView = state.dayType ? "paths" : "day"; renderKid(); }
 
 function renderKidDay(s){
+  const now=new Date();
+  const mon=now.toLocaleDateString(undefined,{month:"short"}).toUpperCase();
+  const dayNum=now.getDate();
+  const wd=now.toLocaleDateString(undefined,{weekday:"long"});
+  // real date card (replaces the static 📅 emoji that always showed "July 17")
+  const dateCard=`<div class="badge datecard"><span class="dc-mon">${mon}</span><span class="dc-day">${dayNum}</span></div>`;
   s.innerHTML = `
-    <div class="kid-hero hero-home"><div class="badge">📅</div><div><h2>What kind of day is today?</h2><p>This sets up the right missions.</p></div></div>
+    <div class="kid-hero hero-home">${dateCard}<div><h2>What kind of day is today?</h2><p>${wd} — this sets up the right missions.</p></div></div>
     <div class="kid-choices">
       <button class="choice" onclick="setDayType('school')"><div class="ci ci-school">🎒</div><div class="cmeta"><b>School Day</b><span>You already did the big one — school!</span></div><div class="cgo">→</div></button>
       <button class="choice" onclick="setDayType('weekend')"><div class="ci ci-weekend">🌈</div><div class="cmeta"><b>No School Day</b><span>Choose one mission from each path.</span></div><div class="cgo">→</div></button>
@@ -3114,10 +3222,12 @@ function finishHotspot(){
 /* ---- Football Days (Tue/Thu) ---- */
 function renderFootball(s){
   s.innerHTML = `
-    <div class="kid-hero hero-move"><div class="badge">⚽</div><div><h2>Football Day!</h2><p>On football days we keep a special evening routine so we get there on time.</p></div></div>
-    <div class="fb-step"><div class="fbt">7:00</div><div class="fbi">🍽️</div><div class="fbx"><b>Dinner</b><span>Eat well — this is the main meal before football.</span></div></div>
-    <div class="fb-step"><div class="fbt">7:30</div><div class="fbi">⚽</div><div class="fbx"><b>Football</b><span>Go play hard and have fun!</span></div></div>
-    <div class="fb-step"><div class="fbt">9:00</div><div class="fbi">🏠</div><div class="fbx"><b>Return home</b><span>Light snack only if really needed — no second dinner.</span></div></div>
+    <div class="kid-hero hero-move"><div class="badge">⚽</div><div><h2>Football Day!</h2><p>It's a late game today — so we get ready early and do our evening routine before we leave.</p></div></div>
+    <div class="fb-step"><div class="fbt">18:00</div><div class="fbi">🪥</div><div class="fbx"><b>Evening routine first</b><span>Teeth & get ready BEFORE we leave — so it's done.</span></div></div>
+    <div class="fb-step"><div class="fbt">18:30</div><div class="fbi">🍽️</div><div class="fbx"><b>Early dinner</b><span>Eat well — the main meal before football.</span></div></div>
+    <div class="fb-step"><div class="fbt">19:30</div><div class="fbi">⚽</div><div class="fbx"><b>Football (late game!)</b><span>Play hard and have fun — finishes ~21:30.</span></div></div>
+    <div class="fb-step"><div class="fbt">21:30</div><div class="fbi">🍎</div><div class="fbx"><b>Home — fruit or small snack</b><span>Something light only — no second dinner.</span></div></div>
+    <div class="fb-step"><div class="fbt">21:50</div><div class="fbi">🛏️</div><div class="fbx"><b>Straight to bed</b><span>Big sleep after all that running!</span></div></div>
     <div class="timer-card timer-open" style="margin-top:8px;"><div class="tbig">⭐ Movement counts!</div><div class="tsub">Football is a big Move mission — tap it done in the Move path to earn your stars.</div></div>`;
 }
 
