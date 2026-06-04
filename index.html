@@ -673,11 +673,7 @@
   <nav class="tabs" id="tabs">
     <button class="tab active" data-tab="today"><span class="emoji">☀️</span>Today</button>
     <button class="tab" data-tab="calendar"><span class="emoji">🗓️</span>Calendar</button>
-    <button class="tab" data-tab="privilege"><span class="emoji">📱</span>Privileges</button>
-    <button class="tab" data-tab="projects"><span class="emoji">🎨</span>Projects</button>
-    <button class="tab" data-tab="contrib"><span class="emoji">🧹</span>House Jobs</button>
     <button class="tab" data-tab="work"><span class="emoji">🛡️</span>Work Time</button>
-    <button class="tab" data-tab="reset"><span class="emoji">🌬️</span>Reset</button>
     <button class="tab" data-tab="points"><span class="emoji">⭐</span>Points</button>
     <button class="tab" data-tab="braindump"><span class="emoji">🧠</span>Brain Dump</button>
     <button class="tab" data-tab="data"><span class="emoji">💾</span>Data</button>
@@ -780,56 +776,6 @@
     </div>
   </section>
 
-  <!-- =================== PRIVILEGE =================== -->
-  <section class="panel" id="panel-privilege">
-    <div class="section-head">
-      <h2>📱 Phone &amp; Game Privilege System</h2>
-    </div>
-
-    <div class="card accent-clay">
-      <p style="font-size:1rem; font-weight:600; margin:0 0 6px;">
-        Phones, games, and timers are privileges. They are earned after we show respect,
-        contribute to the house, use our body, use our mind, and create something.
-      </p>
-    </div>
-
-    <div class="grid cols-2" style="margin-top:14px;">
-      <div class="card" data-kid="jack">
-        <h3>🔵 Jack — checklist before phone/game time</h3>
-        <div class="pchecks"></div>
-        <div class="gate">Complete all 5 to continue.</div>
-      </div>
-      <div class="card" data-kid="anya">
-        <h3>🟣 Anya — checklist before phone/game time</h3>
-        <div class="pchecks"></div>
-        <div class="gate">Complete all 5 to continue.</div>
-      </div>
-    </div>
-    <p class="pill-note" style="margin-top:12px;">Note: even when all are checked, the timer is <strong>considered, not guaranteed</strong>. Parents decide based on the day.</p>
-  </section>
-
-  <!-- =================== PROJECTS =================== -->
-  <section class="panel" id="panel-projects">
-    <div class="section-head">
-      <h2>🎨 Kids Project Menu</h2>
-      <p>Pick something to make, build, or explore. Choose a time, press Started, then Finished, then tick Tidied up.</p>
-    </div>
-    <h3 style="margin:6px 2px;">🧍 Solo Projects</h3>
-    <div class="grid cols-3" id="soloGrid"></div>
-    <h3 style="margin:22px 2px 6px;">👥 Team Projects</h3>
-    <div class="grid cols-3" id="teamGrid"></div>
-  </section>
-
-  <!-- =================== CONTRIBUTIONS =================== -->
-  <section class="panel" id="panel-contrib">
-    <div class="section-head">
-      <h2>🧹 House Contribution Board</h2>
-      <p>Small jobs that keep our home calm. Assign each to Jack, Anya, or Both — then tick when done.</p>
-    </div>
-    <div class="card">
-      <div id="contribList"></div>
-    </div>
-  </section>
 
   <!-- =================== WORK BLOCKS =================== -->
   <section class="panel" id="panel-work">
@@ -916,32 +862,6 @@
         <textarea id="rec_message" rows="2" placeholder="e.g. Rest up Jack, we love you — small steps today 💛"></textarea>
       </label>
       <button class="btn btn-ghost sm" onclick="saveRecoveryMessage()">Save message</button>
-    </div>
-  </section>
-
-  <!-- =================== RESET =================== -->
-  <section class="panel" id="panel-reset">
-    <div class="section-head">
-      <h2>🌬️ Respect Reset</h2>
-      <p>For when things go off track. This is not punishment — it's how we come back to calm.</p>
-    </div>
-    <div class="card accent-lav">
-      <p style="font-weight:600; margin:0 0 6px;">
-        When I am rude, disrespectful, throwing things, shouting, sulking, or walking away,
-        I pause and reset.
-      </p>
-      <ol class="reset-steps" id="resetSteps">
-        <li data-step="0">Stop</li>
-        <li data-step="1">Breathe</li>
-        <li data-step="2">Say what I feel without being rude</li>
-        <li data-step="3">Repair what I did</li>
-        <li data-step="4">Choose a helpful next action</li>
-      </ol>
-      <div id="resetTimer" style="display:none;">01:00</div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn btn-sage" id="resetBtn" onclick="startReset()">🌬️ Start Reset</button>
-        <button class="btn btn-ghost" onclick="endReset()">Done — I'm calm</button>
-      </div>
     </div>
   </section>
 
@@ -1487,13 +1407,11 @@ function defaultState(){
     pin: "1234"             // parent PIN (changeable in parent → Data)
   };
 }
-/* Always-present recovery basics (shown on a sick day on top of any specific tasks). */
+/* Always-present recovery basic — just water. Everything else comes from the
+   tasks the parent (or AI) adds in the parent area. */
 function recoveryBasics(){
   return [
     {id:"hydrate", t:"Drink plenty of water", e:"💧"},
-    {id:"eat_well", t:"Eat healthy food — skip sugary, crispy junk", e:"🍎"},
-    {id:"rest", t:"Rest and take it gently", e:"🛌"},
-    {id:"gentle_try", t:"Do one small kind or gentle thing if you can", e:"💛"},
   ];
 }
 /* Common get-better tasks a parent can one-tap add on a sick day (and AI can use). */
@@ -2846,12 +2764,19 @@ function kidOpenPath(p){ kidView="path:"+p; renderKid(); window.scrollTo(0,0); }
 function kidGo(v){ kidView=v; renderKid(); window.scrollTo(0,0); }
 
 /* ---- Sick / recovery day: gentle get-better tasks (parent or AI can set them) ---- */
+const RECOVERY_PTS = 3;   // gentle points for looking after yourself when unwell
 function recoveryList(){
   // specific tasks the parent/AI added today, then the always-on basics
   const specific = (state.recovery.tasks && state.recovery.tasks[kidCur]) || [];
   return specific.concat(recoveryBasics());
 }
 function recoveryDoneState(){ const r=kidState().routine||{}; return recoveryList().every(t=>r["rec_"+t.id]); }
+function toggleRecoveryStep(t){
+  const ks=kidState(); const key="rec_"+t.id;
+  if(ks.routine[key]){ delete ks.routine[key]; ks.stars=Math.max(0,ks.stars-RECOVERY_PTS); }
+  else { ks.routine[key]=true; ks.stars+=RECOVERY_PTS; toast(`✓ ${t.t} · ⭐ +${RECOVERY_PTS} for looking after yourself!`); }
+  persist(); renderKid();
+}
 /* Getting-Better card — a small list (steam, gargle, nose rinse…) shown inline
    on the sick day, ABOVE the normal Create/Move/Help cards so it stays consistent. */
 function renderGettingBetter(){
@@ -2866,12 +2791,10 @@ function renderGettingBetter(){
     list.forEach(t=>{
       const done=!!ks.routine["rec_"+t.id];
       const row=document.createElement("div"); row.className="mission";
-      row.innerHTML=`<div class="mi">${t.e}</div><div class="mbody"><div class="mtitle">${esc(t.t)}</div></div>
-        <button class="mstar ${done?'done':''}">${done?'✓ Done':'Do it'}</button>`;
-      row.querySelector(".mstar").addEventListener("click",()=>{
-        const key="rec_"+t.id; if(ks.routine[key]) delete ks.routine[key]; else { ks.routine[key]=true; toast("✓ "+t.t); }
-        persist(); renderKid();
-      });
+      row.innerHTML=`<div class="mi">${t.e}</div><div class="mbody"><div class="mtitle">${esc(t.t)}</div>
+          <div class="mmeta"><span class="tag">⭐ +${RECOVERY_PTS} pts</span></div></div>
+        <button class="mstar ${done?'done':''}">${done?'✓ Done':'+'+RECOVERY_PTS}</button>`;
+      row.querySelector(".mstar").addEventListener("click",()=>toggleRecoveryStep(t));
       box.appendChild(row);
     });
   },0);
@@ -3444,9 +3367,6 @@ function lockParent(){
 /* ============================ INIT ============================ */
 function renderAll(){
   bindToday();
-  renderPrivilege();
-  renderProjects();
-  renderContributions();
   renderRhythm();
   bindWork();
   renderPoints();
