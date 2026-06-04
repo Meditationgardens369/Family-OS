@@ -965,6 +965,12 @@
     </div>
 
     <div class="card" style="margin-top:16px;">
+      <h3>✏️ Set stars &amp; money (the totals the kids see)</h3>
+      <p class="hint">Use this to fix a number directly — e.g. after a sync hiccup. This sets the child's running ⭐ stars and 💶 money totals (kept across days; never reset by screen time).</p>
+      <div id="setStarsBox"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
       <h3>🌥️ When privileges pause</h3>
       <p class="hint">We don't frame this harshly. Privileges simply pause when there is:</p>
       <ul style="margin:0 0 6px; padding-left:20px; color:var(--ink-soft); font-size:.9rem;">
@@ -2103,6 +2109,27 @@ function renderPoints(){
     }
     document.getElementById("pause_"+kid).style.display = state.paused[kid] ? "flex" : "none";
   });
+  renderSetStars();
+}
+function renderSetStars(){
+  const box=document.getElementById("setStarsBox"); if(!box) return;
+  box.innerHTML = KIDS.map(k=>{
+    const ks=state.kids[k];
+    return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+      <div style="font-weight:800;min-width:64px;">${KID_INFO[k].av} ${KID_INFO[k].name}</div>
+      <label class="field" style="margin:0;width:110px;"><span>⭐ Stars</span><input type="number" id="ss_${k}_stars" value="${ks.stars||0}" min="0" step="1"></label>
+      <label class="field" style="margin:0;width:110px;"><span>💶 Money €</span><input type="number" id="ss_${k}_money" value="${ks.money||0}" min="0" step="1"></label>
+      <button class="btn btn-sage sm" onclick="setKidTotals('${k}')">Save ${KID_INFO[k].name}</button>
+    </div>`;
+  }).join("");
+}
+function setKidTotals(k){
+  const st=parseInt(document.getElementById("ss_"+k+"_stars").value||0);
+  const mo=parseInt(document.getElementById("ss_"+k+"_money").value||0);
+  state.kids[k].stars=Math.max(0,st);
+  state.kids[k].money=Math.max(0,mo);
+  persist(); renderPoints(); renderKid();
+  toast(`${KID_INFO[k].name}: set to ⭐${state.kids[k].stars} · €${state.kids[k].money}`);
 }
 function addPoint(kid,label){
   if(state.paused[kid]){ toast("Privileges paused — finish reset & repair first 🌥️"); }
@@ -2776,9 +2803,10 @@ function renderKidDay(s){
 function setDayType(t){ state.dayType=t; persist(); kidView="paths"; renderKid(); }
 
 function renderKidPaths(s){
-  if(state.dayType==="sick") return renderSickDay(s);
   const info = KID_INFO[kidCur];
-  const cards = ALL_PATHS;
+  const sick = state.dayType==="sick";
+  // sick day keeps the SAME layout (Create/Move/Help cards) — just gentler + a getting-better list
+  const cards = sick ? ["create","move","help"] : ALL_PATHS;
   const doneCount = UNLOCK_PATHS.filter(pathDone).length;
   const pct = Math.round(doneCount/UNLOCK_PATHS.length*100);
   const pathCard = (p)=>{
@@ -2789,11 +2817,15 @@ function renderKidPaths(s){
       <div class="pb-check">${done?'✓':'›'}</div>
     </button>`;
   };
+  const hello = sick
+    ? `Feel better soon, ${info.av} ${info.name} 💛 Just little, gentle steps today:`
+    : `Hi ${info.av} ${info.name}! Pick your missions:`;
   s.innerHTML = `
     <div class="paths-top">
-      <div class="paths-hello">Hi ${info.av} ${info.name}! Pick your missions:</div>
-      <div class="mini-bar"><div class="mini-fill" style="width:${pct}%"></div></div>
+      <div class="paths-hello">${hello}</div>
+      ${sick?'':`<div class="mini-bar"><div class="mini-fill" style="width:${pct}%"></div></div>`}
     </div>
+    ${sick?renderGettingBetter():''}
     <div class="path-bigs">${cards.map(pathCard).join("")}</div>
     ${renderTimerGate()}
     <div style="margin-top:16px;">
@@ -2820,44 +2852,47 @@ function recoveryList(){
   return specific.concat(recoveryBasics());
 }
 function recoveryDoneState(){ const r=kidState().routine||{}; return recoveryList().every(t=>r["rec_"+t.id]); }
-function renderSickDay(s){
-  const info = KID_INFO[kidCur];
-  const list = recoveryList();
+/* Getting-Better card — a small list (steam, gargle, nose rinse…) shown inline
+   on the sick day, ABOVE the normal Create/Move/Help cards so it stays consistent. */
+function renderGettingBetter(){
   const ks = kidState();
+  const list = recoveryList();
   const doneN = list.filter(t=>ks.routine["rec_"+t.id]).length;
-  const pct = list.length?Math.round(doneN/list.length*100):0;
-  const allDone = doneN===list.length && list.length>0;
   const parentNote = (state.recovery.note||"").trim();
-  s.innerHTML = `
-    <div class="kid-hero" style="background:#eaf3fb;"><div class="badge">🤒</div>
-      <div><h2>Get Better, ${info.name} 💛</h2>
-      <p>Resting is your big job today. Even when we don't feel great, we can still be a little bit strong, gentle and kind. Do these get-better steps when you can — no rushing.</p></div></div>
-    ${parentNote?`<div class="note-card" style="margin-bottom:14px;"><div class="heart">💌</div><p>${esc(parentNote)}</p></div>`:""}
-    <div class="progress-wrap">
-      <div class="progress-head"><span class="ptitle">🌡️ Feel-better steps</span><span class="ppct">${pct}%</span></div>
-      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-      <div class="progress-count">${doneN} / ${list.length} done — every little bit helps you heal</div>
-    </div>
-    <div id="recList"></div>
-    ${allDone
-      ? `<div class="timer-card timer-open"><div class="tbig">🌟 Well done taking care of yourself!</div>
-          <div class="tsub">You did your get-better steps. A little gentle screen time can be requested now — a parent will decide.</div>
-          <button class="btn-request" onclick="requestTimer()" ${ks.timerRequested?'disabled':''}>${ks.timerRequested?'⏳ Waiting for a parent…':'🙋 Ask for some gentle screen time'}</button>
-          ${ks.timerRequested?`<button class="btn-request" onclick="startScreenTime()" style="margin-top:8px;">▶ Parent said yes — start</button>`:''}</div>`
-      : `<div class="timer-card timer-locked"><div class="tbig">💛 Do your feel-better steps first</div><div class="tsub">When they're all ticked, you can ask for a little gentle screen time.</div></div>`}
-    <div class="kid-msg">We love you. Getting better IS the mission today. 💛</div>`;
-  const box=document.getElementById("recList");
-  list.forEach(t=>{
-    const done=!!ks.routine["rec_"+t.id];
-    const row=document.createElement("div"); row.className="mission";
-    row.innerHTML=`<div class="mi">${t.e}</div><div class="mbody"><div class="mtitle">${esc(t.t)}</div></div>
-      <button class="mstar ${done?'done':''}">${done?'✓ Done':'Do it'}</button>`;
-    row.querySelector(".mstar").addEventListener("click",()=>{
-      const key="rec_"+t.id; if(ks.routine[key]) delete ks.routine[key]; else { ks.routine[key]=true; toast("✓ "+t.t); }
-      persist(); renderKid();
+  // build the rows after innerHTML via a placeholder we fill in renderKid's pass
+  setTimeout(()=>{
+    const box=document.getElementById("recList"); if(!box) return;
+    box.innerHTML="";
+    list.forEach(t=>{
+      const done=!!ks.routine["rec_"+t.id];
+      const row=document.createElement("div"); row.className="mission";
+      row.innerHTML=`<div class="mi">${t.e}</div><div class="mbody"><div class="mtitle">${esc(t.t)}</div></div>
+        <button class="mstar ${done?'done':''}">${done?'✓ Done':'Do it'}</button>`;
+      row.querySelector(".mstar").addEventListener("click",()=>{
+        const key="rec_"+t.id; if(ks.routine[key]) delete ks.routine[key]; else { ks.routine[key]=true; toast("✓ "+t.t); }
+        persist(); renderKid();
+      });
+      box.appendChild(row);
     });
-    box.appendChild(row);
-  });
+  },0);
+  return `
+    ${parentNote?`<div class="note-card" style="margin-bottom:12px;"><div class="heart">💌</div><p>${esc(parentNote)}</p></div>`:""}
+    <div class="group-head">🌡️ Getting-Better routine <span style="font-weight:600;color:var(--ink-soft);font-size:.8rem;">· ${doneN}/${list.length} done — every bit helps you heal</span></div>
+    <div id="recList"></div>
+    <div class="group-head" style="margin-top:16px;">🎯 Gentle missions <span style="font-weight:600;color:var(--ink-soft);font-size:.8rem;">· pick something easy if you feel up to it</span></div>`;
+}
+/* Gentle screen gate for sick days: do the getting-better routine, then a parent decides. */
+function renderSickGate(){
+  const ks = kidState();
+  const allDone = recoveryDoneState();
+  if(allDone){
+    return `<div class="timer-card timer-open" style="margin-top:8px;"><div class="tbig">🌟 Well done looking after yourself!</div>
+      <div class="tsub">You did your getting-better steps. A little gentle screen time can be asked for now — a parent decides.</div>
+      <button class="btn-request" onclick="requestTimer()" ${ks.timerRequested?'disabled':''}>${ks.timerRequested?'⏳ Waiting for a parent…':'🙋 Ask for some gentle screen time'}</button>
+      ${ks.timerRequested?`<button class="btn-request" onclick="startScreenTime()" style="margin-top:8px;">▶ Parent said yes — start</button>`:''}</div>`;
+  }
+  return `<div class="timer-card timer-locked" style="margin-top:8px;"><div class="tbig">💛 Do your getting-better steps first</div>
+    <div class="tsub">When they're all ticked, you can ask for a little gentle screen time.</div></div>`;
 }
 
 /* Timer prerequisites — depend on the day-type:
@@ -2868,7 +2903,15 @@ function renderSickDay(s){
 function timerPrereqs(){
   const noSchool = state.dayType && state.dayType!=="school";
   let reqs;
-  if(noSchool){
+  if(state.dayType==="sick"){
+    // gentle but real: getting-better steps + morning routine + one calm Create & Move
+    reqs = [
+      { ok:recoveryDoneState(), label:"🌡️ Getting-better steps", recovery:true },
+      { ok:routineDone(), label:"🌅 Morning routine", routine:true },
+      { ok:pathDone('create'), label:"🎨 One gentle Create", go:()=>kidOpenPath('create') },
+      { ok:pathDone('move'),   label:"🏃 A little Move (only if you feel up to it)", go:()=>kidOpenPath('move') },
+    ];
+  } else if(noSchool){
     reqs = [
       { ok:routineDone(), label:"🌅 Morning routine", routine:true },
       { ok:pathDone('create'), label:"🎨 One Create mission (use your mind)", go:()=>kidOpenPath('create') },
@@ -2883,8 +2926,9 @@ function timerPrereqs(){
       { ok:pathDone('help'),   label:"🫶 One Help mission",   go:()=>kidOpenPath('help') },
     ];
   }
-  // No-school day: screen can't even be requested until ~midday (≈4h after waking)
-  if(noSchool && new Date().getHours() < NOSCHOOL_SCREEN_HOUR){
+  // No-school day: screen can't be requested until ~midday (≈4h after waking).
+  // Skip this on a sick day — rest is more flexible when unwell.
+  if(noSchool && state.dayType!=="sick" && new Date().getHours() < NOSCHOOL_SCREEN_HOUR){
     reqs.push({ ok:false, label:"⏰ Screen time opens around midday", wait:true });
   }
   // Evening lock: from ~6pm, the evening routine must be done before screen time
@@ -2966,8 +3010,16 @@ function startScreenLoop(){
 function endScreenTime(auto){
   const ks=kidState();
   ks.screenEndsAt=0;
-  // reset the unlock missions so they must be re-earned for the next session
-  UNLOCK_PATHS.forEach(p=>{ (MISSIONS[p]||[]).forEach(m=>{ if(ks.done[m.id]){ const rec=ks.done[m.id]; /* keep the points already earned; just clear the 'done' flag */ delete ks.done[m.id]; } }); });
+  ks.timerRequested=false;   // must ask again next time
+  // Reset everything the unlock GATE checks, so the next session must be re-earned.
+  // Points/money already earned are kept — only the "done today" flags clear.
+  // 1) mission completions across all paths
+  ALL_PATHS.forEach(p=>{ (MISSIONS[p]||[]).forEach(m=>{ if(ks.done[m.id]) delete ks.done[m.id]; }); });
+  // 2) morning-routine steps (re-do before the next unlock)
+  routineSteps().forEach(st=>{ delete ks.routine[st.id]; });
+  // 3) sick-day getting-better steps (rec_*)
+  recoveryList().forEach(t=>{ delete ks.routine["rec_"+t.id]; });
+  // NOTE: evening-routine steps are intentionally NOT reset — that's a once-a-night thing.
   persist(); renderKid();
   toast(auto?"⏰ Screen time finished — earn your missions again for more 💛":"Screen time ended.");
 }
